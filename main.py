@@ -97,30 +97,23 @@ class BookshelfApp(ctk.CTk):
         )
         self.new_book_btn.pack(side="left", padx=(28, 0), pady=13)
 
-        # --- STREAK BADGE (TOP-RIGHT) ---
+        # --- STREAK BADGE (TOP-RIGHT, ONLY TEXT AND NUMBER) ---
         self.streak_badge = ctk.CTkFrame(
             self.header_frame,
             fg_color=STREAK_BG,
-            corner_radius=16,
+            corner_radius=14,
             border_width=1,
             border_color=STREAK_BORDER
         )
         self.streak_badge.pack(side="right", padx=(0, 28), pady=13)
 
-        streak_icon = ctk.CTkLabel(
-            self.streak_badge,
-            text="🔥",
-            font=ctk.CTkFont(size=12)
-        )
-        streak_icon.pack(side="left", padx=(10, 4), pady=4)
-
         self.streak_text = ctk.CTkLabel(
             self.streak_badge,
-            text="7 Päivän Putki",
+            text="Putki: 7 päivää",
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color=STREAK_TEXT
         )
-        self.streak_text.pack(side="left", padx=(0, 12), pady=4)
+        self.streak_text.pack(padx=14, pady=5)
 
         # 2. BOTTOM PERSISTENT PROGRESS BAR
         self.footer_frame = ctk.CTkFrame(

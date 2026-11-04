@@ -18,7 +18,7 @@ Puhdas, vaalea ja skandinaavisen minimalistinen lukupöytäsovellus rakennettuna
   - Keskellä näkyy ainoastaan suuri esteettinen edistymispalkki ja sivumäärä/prosentit ilman mitään häiritseviä tekstejä.
   - Kosketus herättää näytön välittömästi takaisin.
 - **Lukusuora / Streak**:
-  - Oikeassa yläkulmassa siisti teksti- ja numerolaatta (`🔥 7 Päivän Putki`).
+  - Oikeassa yläkulmassa siisti teksti- ja numerolaatta (`Putki: 7 päivää`), ilman laitteistoriippuvaisia emojeja.
 
 ---
 
