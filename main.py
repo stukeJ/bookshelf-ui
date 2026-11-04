@@ -1,68 +1,648 @@
 import customtkinter as ctk
+import time
 
-# Appearance settings
-ctk.set_appearance_mode("System")
+# Set light appearance mode for normal reading view
+ctk.set_appearance_mode("Light")
 ctk.set_default_color_theme("blue")
 
+# --- Scandinavian / Warm Paper Neutral Palette ---
+BG_COLOR = "#f6f5f1"          # Soft warm linen / paper tone
+CARD_BG = "#ffffff"           # Pure crisp white card surface
+CARD_SURFACE = "#eeece6"      # Subtle elevated surface (stat boxes, numpad keys)
+CARD_HOVER = "#e5e2da"        # Gentle hover for touch buttons
+BORDER_COLOR = "#e2ded6"      # Soft border outline
+ACCENT_BRASS = "#b3823c"      # Brushed brass / warm golden tone
+ACCENT_DARK = "#292524"       # Deep warm charcoal for buttons and high contrast
+ACCENT_DARK_HOVER = "#1c1917"
+TEXT_PRIMARY = "#1c1917"      # Deep charcoal text
+TEXT_SECONDARY = "#57534e"    # Warm slate gray
+TEXT_MUTED = "#8f8a81"        # Muted caption gray
+STREAK_BG = "#f8f3e8"         # Warm subtle amber tint
+STREAK_BORDER = "#e8dbbe"
+STREAK_TEXT = "#8a5814"       # Warm golden brown for streak text
 
-class SmallTestApp(ctk.CTk):
+# Standby Mode Colors
+STANDBY_BG = "#000000"        # Pure black for screen standby
+STANDBY_TRACK = "#1e1e1e"     # Dark progress bar background
+STANDBY_BAR = "#c28535"       # Warm glowing amber/brass bar in the dark
+STANDBY_TEXT_PAGES = "#e5e5e5"# Crisp stats text in the dark
+
+IDLE_TIMEOUT_SECONDS = 15     # 15s inactivity triggers black standby screen
+
+
+class BookshelfApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Pi Test")
-        self.geometry("380x300")
-        self.resizable(False, False)
+        self.title("Kirjateline • Lukuseuranta")
+        self.geometry("680x560")
+        self.minsize(560, 480)
+        self.configure(fg_color=BG_COLOR)
 
-        self.counter = 0
+        # Single active book tracked directly
+        self.current_page = 0
+        self.total_pages = 350
 
-        # Title Label
-        self.label = ctk.CTkLabel(
+        # UI State: "summary" or "numpad"
+        self.current_view_mode = "summary"
+        self.numpad_mode = "current_page"  # "current_page" or "total_pages"
+        self.numpad_input_str = ""
+        self.numpad_fresh = False
+
+        # Idle / Standby Tracking
+        self.is_standby = False
+        self.idle_timer_id = None
+        self.last_interaction_time = time.time()
+
+        self._build_ui()
+        self._build_standby_overlay()
+        self._refresh_all_views()
+
+        # Global event listeners for touchscreen taps, mouse clicks & movement
+        self.bind_all("<ButtonPress>", self._on_user_activity)
+        self.bind_all("<KeyRelease>", self._on_key_release)
+        self.bind_all("<Motion>", self._on_user_motion)
+
+        # Start 15s timer
+        self._schedule_idle_check()
+
+    def _build_ui(self):
+        # 1. TOP HEADER (Left: "Uusi kirja", Right: Streak badge)
+        self.header_frame = ctk.CTkFrame(
             self,
-            text="Raspberry Pi Test",
-            font=ctk.CTkFont(size=20, weight="bold"),
+            fg_color=CARD_BG,
+            corner_radius=0,
+            height=62,
+            border_width=0
         )
-        self.label.pack(pady=(20, 10))
+        self.header_frame.pack(fill="x", side="top")
+        self.header_frame.pack_propagate(False)
 
-        # Counter display & button
-        self.counter_label = ctk.CTkLabel(
-            self,
-            text="Clicks: 0",
-            font=ctk.CTkFont(size=16),
+        hairline = ctk.CTkFrame(self, fg_color=BORDER_COLOR, height=1, corner_radius=0)
+        hairline.pack(fill="x", side="top")
+
+        # --- "Uusi kirja" BUTTON (TOP-LEFT) ---
+        self.new_book_btn = ctk.CTkButton(
+            self.header_frame,
+            text="Uusi kirja",
+            height=36,
+            corner_radius=8,
+            fg_color=CARD_SURFACE,
+            hover_color=CARD_HOVER,
+            text_color=TEXT_PRIMARY,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._show_numpad_for_new_book
         )
-        self.counter_label.pack(pady=5)
+        self.new_book_btn.pack(side="left", padx=(28, 0), pady=13)
 
-        self.click_btn = ctk.CTkButton(
-            self,
-            text="Click Me",
-            command=self.on_click,
+        # --- STREAK BADGE (TOP-RIGHT) ---
+        self.streak_badge = ctk.CTkFrame(
+            self.header_frame,
+            fg_color=STREAK_BG,
+            corner_radius=16,
+            border_width=1,
+            border_color=STREAK_BORDER
         )
-        self.click_btn.pack(pady=10)
+        self.streak_badge.pack(side="right", padx=(0, 28), pady=13)
 
-        # Text input & echo
-        self.entry = ctk.CTkEntry(
-            self,
-            placeholder_text="Type something...",
-            width=260,
+        streak_icon = ctk.CTkLabel(
+            self.streak_badge,
+            text="🔥",
+            font=ctk.CTkFont(size=12)
         )
-        self.entry.pack(pady=10)
-        self.entry.bind("<KeyRelease>", self.on_text_change)
+        streak_icon.pack(side="left", padx=(10, 4), pady=4)
 
-        self.echo_label = ctk.CTkLabel(
+        self.streak_text = ctk.CTkLabel(
+            self.streak_badge,
+            text="7 Päivän Putki",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=STREAK_TEXT
+        )
+        self.streak_text.pack(side="left", padx=(0, 12), pady=4)
+
+        # 2. BOTTOM PERSISTENT PROGRESS BAR
+        self.footer_frame = ctk.CTkFrame(
             self,
+            fg_color=CARD_BG,
+            corner_radius=0,
+            height=82,
+            border_width=0
+        )
+        self.footer_frame.pack(fill="x", side="bottom")
+        self.footer_frame.pack_propagate(False)
+
+        footer_hairline = ctk.CTkFrame(self, fg_color=BORDER_COLOR, height=1, corner_radius=0)
+        footer_hairline.pack(fill="x", side="bottom")
+
+        footer_inner = ctk.CTkFrame(self.footer_frame, fg_color="transparent")
+        footer_inner.pack(fill="both", expand=True, padx=28, pady=10)
+
+        # Stats row
+        meta_row = ctk.CTkFrame(footer_inner, fg_color="transparent")
+        meta_row.pack(fill="x", pady=(0, 5))
+
+        self.footer_title_lbl = ctk.CTkLabel(
+            meta_row,
+            text="Edistyminen",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=TEXT_SECONDARY,
+            anchor="w"
+        )
+        self.footer_title_lbl.pack(side="left")
+
+        self.footer_pct_lbl = ctk.CTkLabel(
+            meta_row,
+            text="0%",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=TEXT_PRIMARY,
+            anchor="e"
+        )
+        self.footer_pct_lbl.pack(side="right")
+
+        # Progress Bar
+        self.progress_bar = ctk.CTkProgressBar(
+            footer_inner,
+            height=8,
+            corner_radius=4,
+            fg_color=CARD_SURFACE,
+            progress_color=ACCENT_DARK
+        )
+        self.progress_bar.pack(fill="x")
+        self.progress_bar.set(0)
+
+        # Footer Subtext
+        self.footer_sub_lbl = ctk.CTkLabel(
+            footer_inner,
             text="",
-            text_color="gray",
+            font=ctk.CTkFont(size=11),
+            text_color=TEXT_MUTED
         )
-        self.echo_label.pack(pady=5)
+        self.footer_sub_lbl.pack(anchor="w", pady=(3, 0))
 
-    def on_click(self):
-        self.counter += 1
-        self.counter_label.configure(text=f"Clicks: {self.counter}")
+        # 3. MAIN BODY CONTAINER (Everything switches inside the same window)
+        self.body_container = ctk.CTkFrame(self, fg_color="transparent")
+        self.body_container.pack(fill="both", expand=True, padx=28, pady=18)
 
-    def on_text_change(self, event=None):
-        text = self.entry.get().strip()
-        self.echo_label.configure(text=text if text else "")
+        # Main Card
+        self.main_card = ctk.CTkFrame(
+            self.body_container,
+            fg_color=CARD_BG,
+            corner_radius=16,
+            border_width=1,
+            border_color=BORDER_COLOR
+        )
+        self.main_card.pack(fill="both", expand=True)
+
+        # --- VIEW 1: Reading Summary Frame ---
+        self.summary_frame = ctk.CTkFrame(self.main_card, fg_color="transparent")
+        self._build_summary_view()
+
+        # --- VIEW 2: Pure On-Screen Touch Numpad Frame (Used for both page update & new book) ---
+        self.numpad_frame = ctk.CTkFrame(self.main_card, fg_color="transparent")
+        self._build_numpad_view()
+
+        # Start with summary view visible
+        self.summary_frame.pack(fill="both", expand=True, padx=30, pady=26)
+
+    def _build_summary_view(self):
+        """Standard reading overview with 'Päivitä sivu, jolla olet' button."""
+        # Stat Card (Clean neutral tone box)
+        self.stat_box = ctk.CTkFrame(
+            self.summary_frame,
+            fg_color=CARD_SURFACE,
+            corner_radius=14,
+            border_width=1,
+            border_color=BORDER_COLOR
+        )
+        self.stat_box.pack(fill="x", pady=(0, 24))
+
+        stat_inner = ctk.CTkFrame(self.stat_box, fg_color="transparent")
+        stat_inner.pack(fill="x", padx=26, pady=20)
+
+        left_stat = ctk.CTkFrame(stat_inner, fg_color="transparent")
+        left_stat.pack(side="left")
+
+        page_caption = ctk.CTkLabel(
+            left_stat,
+            text="Nykyinen sivu",
+            font=ctk.CTkFont(size=12),
+            text_color=TEXT_MUTED
+        )
+        page_caption.pack(anchor="w")
+
+        self.hero_page_big = ctk.CTkLabel(
+            left_stat,
+            text="0",
+            font=ctk.CTkFont(size=42, weight="bold"),
+            text_color=TEXT_PRIMARY
+        )
+        self.hero_page_big.pack(anchor="w")
+
+        self.hero_total_lbl = ctk.CTkLabel(
+            left_stat,
+            text="/ 0 sivua",
+            font=ctk.CTkFont(size=13),
+            text_color=TEXT_SECONDARY
+        )
+        self.hero_total_lbl.pack(anchor="w")
+
+        right_stat = ctk.CTkFrame(stat_inner, fg_color="transparent")
+        right_stat.pack(side="right")
+
+        self.hero_pct_big = ctk.CTkLabel(
+            right_stat,
+            text="0%",
+            font=ctk.CTkFont(size=40, weight="bold"),
+            text_color=ACCENT_DARK
+        )
+        self.hero_pct_big.pack(anchor="e")
+
+        self.hero_rem_lbl = ctk.CTkLabel(
+            right_stat,
+            text="0 sivua jäljellä",
+            font=ctk.CTkFont(size=13),
+            text_color=TEXT_MUTED
+        )
+        self.hero_rem_lbl.pack(anchor="e")
+
+        # "Päivitä sivu, jolla olet" Button
+        self.add_pages_btn = ctk.CTkButton(
+            self.summary_frame,
+            text="Päivitä sivu, jolla olet",
+            height=52,
+            corner_radius=12,
+            fg_color=ACCENT_DARK,
+            hover_color=ACCENT_DARK_HOVER,
+            text_color="#ffffff",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            command=self._show_numpad_for_current_page
+        )
+        self.add_pages_btn.pack(fill="x", pady=(4, 0))
+
+    def _build_numpad_view(self):
+        """Pure on-screen touch numpad directly in the same window (no separate popup windows)."""
+        numpad_head = ctk.CTkFrame(self.numpad_frame, fg_color="transparent")
+        numpad_head.pack(fill="x", pady=(0, 10))
+
+        self.numpad_tag_lbl = ctk.CTkLabel(
+            numpad_head,
+            text="MERKITSE SIVU • KOSKETUSNÄPPÄIMISTÖ",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=ACCENT_BRASS,
+            anchor="w"
+        )
+        self.numpad_tag_lbl.pack(anchor="w")
+
+        key_container = ctk.CTkFrame(self.numpad_frame, fg_color="transparent")
+        key_container.pack(fill="both", expand=True)
+
+        key_container.grid_columnconfigure(0, weight=4)
+        key_container.grid_columnconfigure(1, weight=5)
+        key_container.grid_rowconfigure(0, weight=1)
+
+        # --- LEFT COLUMN: Digital Page Display + Action Buttons ---
+        left_col = ctk.CTkFrame(key_container, fg_color="transparent")
+        left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 16))
+
+        disp_card = ctk.CTkFrame(
+            left_col,
+            fg_color=CARD_SURFACE,
+            corner_radius=12,
+            border_width=1,
+            border_color=BORDER_COLOR
+        )
+        disp_card.pack(fill="x", pady=(0, 14))
+
+        self.numpad_sub_lbl = ctk.CTkLabel(
+            disp_card,
+            text="Syötetty sivu",
+            font=ctk.CTkFont(size=11),
+            text_color=TEXT_MUTED
+        )
+        self.numpad_sub_lbl.pack(pady=(12, 0))
+
+        self.numpad_display_num = ctk.CTkLabel(
+            disp_card,
+            text="0",
+            font=ctk.CTkFont(size=44, weight="bold"),
+            text_color=TEXT_PRIMARY
+        )
+        self.numpad_display_num.pack(pady=(2, 0))
+
+        self.numpad_display_meta = ctk.CTkLabel(
+            disp_card,
+            text="/ 0 sivua (0%)",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=ACCENT_BRASS
+        )
+        self.numpad_display_meta.pack(pady=(2, 14))
+
+        self.numpad_save_btn = ctk.CTkButton(
+            left_col,
+            text="Tallenna sivu ✓",
+            height=46,
+            corner_radius=10,
+            fg_color=ACCENT_DARK,
+            hover_color=ACCENT_DARK_HOVER,
+            text_color="#ffffff",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=self._confirm_numpad
+        )
+        self.numpad_save_btn.pack(fill="x", pady=(0, 8))
+
+        cancel_btn = ctk.CTkButton(
+            left_col,
+            text="Peruuta",
+            height=42,
+            corner_radius=10,
+            fg_color=CARD_BG,
+            hover_color=CARD_HOVER,
+            text_color=TEXT_SECONDARY,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            font=ctk.CTkFont(size=12),
+            command=self._show_summary_view
+        )
+        cancel_btn.pack(fill="x")
+
+        # --- RIGHT COLUMN: Pure Touch Keypad Grid (no preset buttons) ---
+        keys_col = ctk.CTkFrame(key_container, fg_color="transparent")
+        keys_col.grid(row=0, column=1, sticky="nsew")
+
+        keys = [
+            ["1", "2", "3"],
+            ["4", "5", "6"],
+            ["7", "8", "9"],
+            ["C", "0", "⌫"]
+        ]
+
+        for r, row in enumerate(keys):
+            keys_col.grid_rowconfigure(r, weight=1)
+            for c, key in enumerate(row):
+                keys_col.grid_columnconfigure(c, weight=1)
+                if key == "C":
+                    cmd = self._numpad_clear
+                    fg = "#fdf2f2"
+                    hover = "#fee2e2"
+                    txt_col = "#dc2626"
+                elif key == "⌫":
+                    cmd = self._numpad_backspace
+                    fg = CARD_SURFACE
+                    hover = CARD_HOVER
+                    txt_col = TEXT_PRIMARY
+                else:
+                    cmd = lambda num=key: self._numpad_append(num)
+                    fg = CARD_SURFACE
+                    hover = CARD_HOVER
+                    txt_col = TEXT_PRIMARY
+
+                btn = ctk.CTkButton(
+                    keys_col,
+                    text=key,
+                    corner_radius=10,
+                    fg_color=fg,
+                    hover_color=hover,
+                    text_color=txt_col,
+                    border_width=1,
+                    border_color=BORDER_COLOR,
+                    font=ctk.CTkFont(size=20, weight="bold"),
+                    command=cmd
+                )
+                btn.grid(row=r, column=c, padx=3, pady=3, sticky="nsew")
+
+    def _show_numpad_for_current_page(self):
+        """Switches in-place to numpad for updating current reading page."""
+        self.numpad_mode = "current_page"
+        self.numpad_tag_lbl.configure(text="MERKITSE SIVU • KOSKETUSNÄPPÄIMISTÖ")
+        self.numpad_sub_lbl.configure(text="Nykyinen sivu")
+        self.numpad_save_btn.configure(text="Tallenna sivu ✓")
+        self.numpad_input_str = str(self.current_page) if self.current_page > 0 else ""
+        self.numpad_fresh = True
+        self._update_numpad_display()
+
+        self.summary_frame.pack_forget()
+        self.numpad_frame.pack(fill="both", expand=True, padx=26, pady=16)
+        self.current_view_mode = "numpad"
+
+    def _show_numpad_for_new_book(self):
+        """Switches in-place to numpad for setting new book's total pages (same window, pure numpad)."""
+        self.numpad_mode = "total_pages"
+        self.numpad_tag_lbl.configure(text="UUSI KIRJA • KOKONAISSIVUMÄÄRÄ")
+        self.numpad_sub_lbl.configure(text="Kirjan sivumäärä yhteensä")
+        self.numpad_save_btn.configure(text="Aloita kirja ✓")
+        self.numpad_input_str = ""
+        self.numpad_fresh = False
+        self._update_numpad_display()
+
+        self.summary_frame.pack_forget()
+        self.numpad_frame.pack(fill="both", expand=True, padx=26, pady=16)
+        self.current_view_mode = "numpad"
+
+    def _show_summary_view(self):
+        """Transitions back to the reading summary card."""
+        self.numpad_frame.pack_forget()
+        self.summary_frame.pack(fill="both", expand=True, padx=30, pady=26)
+        self.current_view_mode = "summary"
+
+    def _update_numpad_display(self):
+        val = self.numpad_input_str if self.numpad_input_str else "0"
+        self.numpad_display_num.configure(text=val)
+
+        if self.numpad_mode == "current_page":
+            try:
+                num = int(val)
+                pct = min(100.0, (num / self.total_pages) * 100) if self.total_pages > 0 else 0
+                self.numpad_display_meta.configure(text=f"/ {self.total_pages} sivua  ({pct:.0f}%)")
+            except ValueError:
+                self.numpad_display_meta.configure(text=f"/ {self.total_pages} sivua")
+        else:
+            self.numpad_display_meta.configure(text="sivua yhteensä")
+
+    def _numpad_append(self, digit):
+        if self.numpad_fresh:
+            self.numpad_input_str = ""
+            self.numpad_fresh = False
+
+        if len(self.numpad_input_str) >= 5:
+            return
+        if self.numpad_input_str == "0":
+            self.numpad_input_str = digit
+        else:
+            self.numpad_input_str += digit
+
+        if self.numpad_mode == "current_page":
+            try:
+                if int(self.numpad_input_str) > self.total_pages:
+                    self.numpad_input_str = str(self.total_pages)
+            except ValueError:
+                pass
+
+        self._update_numpad_display()
+
+    def _numpad_backspace(self):
+        self.numpad_fresh = False
+        if self.numpad_input_str:
+            self.numpad_input_str = self.numpad_input_str[:-1]
+            self._update_numpad_display()
+
+    def _numpad_clear(self):
+        self.numpad_fresh = False
+        self.numpad_input_str = ""
+        self._update_numpad_display()
+
+    def _confirm_numpad(self):
+        try:
+            val = int(self.numpad_input_str) if self.numpad_input_str else 0
+        except ValueError:
+            val = 0
+
+        if self.numpad_mode == "current_page":
+            if val > self.total_pages:
+                val = self.total_pages
+            self.current_page = val
+        else:
+            if val <= 0:
+                return  # Must be positive page count
+            self.total_pages = val
+            self.current_page = 0
+
+        self._show_summary_view()
+        self._refresh_all_views()
+
+    # --- 4. 15-SECOND BLACK STANDBY SCREEN SAVER ---
+    def _build_standby_overlay(self):
+        """Full-screen pitch black standby overlay with only a large clean progress bar."""
+        self.standby_frame = ctk.CTkFrame(
+            self,
+            fg_color=STANDBY_BG,
+            corner_radius=0
+        )
+
+        center_box = ctk.CTkFrame(self.standby_frame, fg_color="transparent")
+        center_box.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Big, sleek progress bar in center
+        self.standby_progress = ctk.CTkProgressBar(
+            center_box,
+            width=480,
+            height=18,
+            corner_radius=9,
+            fg_color=STANDBY_TRACK,
+            progress_color=STANDBY_BAR
+        )
+        self.standby_progress.pack(pady=(0, 16))
+
+        # Page stats and percentage underneath
+        self.standby_stats = ctk.CTkLabel(
+            center_box,
+            text="",
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color=STANDBY_TEXT_PAGES
+        )
+        self.standby_stats.pack()
+
+    def _enter_standby(self):
+        """Activates pitch black standby screen with large progress bar."""
+        if not self.is_standby:
+            self.is_standby = True
+            pct = (self.current_page / self.total_pages * 100) if self.total_pages > 0 else 0
+            self.standby_stats.configure(text=f"{self.current_page} / {self.total_pages} sivua  •  {pct:.0f}%")
+            self.standby_progress.set(min(1.0, self.current_page / max(1, self.total_pages)))
+
+            self.standby_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
+            self.standby_frame.lift()
+
+    def _exit_standby(self):
+        """Wakes up from standby screen."""
+        if self.is_standby:
+            self.is_standby = False
+            self.standby_frame.place_forget()
+            self.last_interaction_time = time.time()
+            self._schedule_idle_check()
+
+    def _on_user_activity(self, event=None):
+        """Fires on any touch tap or mouse click."""
+        if self.is_standby:
+            self._exit_standby()
+            return
+        self.last_interaction_time = time.time()
+        self._schedule_idle_check()
+
+    def _on_key_release(self, event=None):
+        """Handles physical keyboard presses if used."""
+        if self.is_standby:
+            self._exit_standby()
+            return
+        self.last_interaction_time = time.time()
+        self._schedule_idle_check()
+
+        if self.current_view_mode == "numpad" and event is not None:
+            if event.keysym in ("Return", "KP_Enter"):
+                self._confirm_numpad()
+            elif event.keysym == "Escape":
+                self._show_summary_view()
+            elif event.keysym == "BackSpace":
+                self._numpad_backspace()
+            elif event.char and event.char.isdigit():
+                self._numpad_append(event.char)
+
+    def _on_user_motion(self, event=None):
+        """Throttled motion check."""
+        if self.is_standby:
+            self._exit_standby()
+            return
+        now = time.time()
+        if now - self.last_interaction_time >= 1.0:
+            self.last_interaction_time = now
+            self._schedule_idle_check()
+
+    def _schedule_idle_check(self):
+        """Schedules standby transition after IDLE_TIMEOUT_SECONDS."""
+        if self.idle_timer_id is not None:
+            try:
+                self.after_cancel(self.idle_timer_id)
+            except Exception:
+                pass
+        self.idle_timer_id = self.after(IDLE_TIMEOUT_SECONDS * 1000, self._check_idle)
+
+    def _check_idle(self):
+        now = time.time()
+        idle_elapsed = now - self.last_interaction_time
+        if idle_elapsed >= IDLE_TIMEOUT_SECONDS:
+            self._enter_standby()
+        else:
+            remaining_ms = int((IDLE_TIMEOUT_SECONDS - idle_elapsed) * 1000)
+            self.idle_timer_id = self.after(max(100, remaining_ms), self._check_idle)
+
+    def _refresh_all_views(self):
+        cur = self.current_page
+        total = self.total_pages
+        pct = (cur / total * 100) if total > 0 else 0
+        left = max(0, total - cur)
+
+        # Update Reading Summary Card
+        self.hero_page_big.configure(text=str(cur))
+        self.hero_total_lbl.configure(text=f"/ {total} sivua")
+        self.hero_pct_big.configure(text=f"{pct:.0f}%")
+
+        if cur >= total and total > 0:
+            self.hero_rem_lbl.configure(text="Valmis! Luettu loppuun", text_color="#15803d")
+        else:
+            self.hero_rem_lbl.configure(text=f"{left} sivua jäljellä", text_color=TEXT_MUTED)
+
+        # Update Bottom Persistent Progress Bar
+        self.footer_title_lbl.configure(text=f"Edistyminen: {cur} / {total} sivua")
+        self.footer_pct_lbl.configure(text=f"{pct:.1f}%")
+        self.progress_bar.set(min(1.0, cur / max(1, total)))
+
+        if cur >= total and total > 0:
+            self.footer_sub_lbl.configure(text="Kirja on luettu loppuun!", text_color="#15803d")
+        else:
+            self.footer_sub_lbl.configure(text=f"{left} sivua jäljellä maaliin.", text_color=TEXT_MUTED)
 
 
 if __name__ == "__main__":
-    app = SmallTestApp()
+    app = BookshelfApp()
     app.mainloop()
