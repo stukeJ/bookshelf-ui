@@ -4,7 +4,7 @@ Puhdas, vaalea ja skandinaavisen minimalistinen lukupöytäsovellus rakennettuna
 
 ---
 
-## ✨ Ominaisuudet
+## Ominaisuudet
 
 - **Kaikki toiminnot samassa ikkunassa (ei erillisiä ponnahdusikkunoita)**:
   - Sovellus ei avaa erillisiä popup-ikkunoita, vaan päänäkymä vaihtuu sulavasti kosketusnäppäimistöön ja takaisin.
@@ -22,7 +22,7 @@ Puhdas, vaalea ja skandinaavisen minimalistinen lukupöytäsovellus rakennettuna
 
 ---
 
-## 🚀 Käynnistys Windowsilla
+## Käynnistys Windowsilla
 
 ```powershell
 pip install -r requirements.txt
@@ -31,7 +31,7 @@ python main.py
 
 ---
 
-## 🍓 Käynnistys Raspberry Pi:llä
+## Käynnistys Raspberry Pi:llä
 
 ```bash
 # 1. Asenna Tkinter-kirjastot
@@ -47,4 +47,5 @@ pip install -r requirements.txt
 # 3. Käynnistä
 python3 main.py
 ```
+
 *(Jos käytät vanhempaa Python 3.7.3 -versiota: `pip install "customtkinter<=5.1.3" "pillow<10.0.0"`)*

@@ -37,6 +37,7 @@ class BookshelfApp(ctk.CTk):
         self.title("Kirjateline • Lukuseuranta")
         self.geometry("680x560")
         self.minsize(560, 480)
+        self.attributes("-fullscreen", True)
         self.configure(fg_color=BG_COLOR)
 
         # Single active book tracked directly
@@ -97,6 +98,23 @@ class BookshelfApp(ctk.CTk):
         )
         self.new_book_btn.pack(side="left", padx=(28, 0), pady=13)
 
+        # --- CLOSE BUTTON (TOP-RIGHT) ---
+        self.close_btn = ctk.CTkButton(
+            self.header_frame,
+            text="X",
+            width=32,
+            height=32,
+            corner_radius=8,
+            fg_color=CARD_SURFACE,
+            hover_color=CARD_HOVER,
+            text_color=TEXT_PRIMARY,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=self.destroy
+        )
+        self.close_btn.pack(side="right", padx=(0, 12), pady=15)
+
         # --- STREAK BADGE (TOP-RIGHT, ONLY TEXT AND NUMBER) ---
         self.streak_badge = ctk.CTkFrame(
             self.header_frame,
@@ -105,7 +123,7 @@ class BookshelfApp(ctk.CTk):
             border_width=1,
             border_color=STREAK_BORDER
         )
-        self.streak_badge.pack(side="right", padx=(0, 28), pady=13)
+        self.streak_badge.pack(side="right", padx=(0, 12), pady=13)
 
         self.streak_text = ctk.CTkLabel(
             self.streak_badge,
