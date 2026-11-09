@@ -32,13 +32,14 @@ STANDBY_TEXT_PAGES = "#e5e5e5"# Crisp stats text in the dark
 IDLE_TIMEOUT_SECONDS = 15     # 15s inactivity triggers black standby screen
 
 
-def draw_plant_on_canvas(canvas, alive=True, dark_mode=False, w=130, h=130):
+def draw_plant_on_canvas(canvas, alive=True, dark_mode=False, w=110, h=110):
     """
     Draws an aesthetic minimalist potted plant directly onto a native tkinter.Canvas.
     Requires zero PIL / ImageTk dependencies and runs natively on Python 3.7.3.
     """
     canvas.delete("all")
 
+    s = min(w, h) / 130.0
     cx = w / 2.0
     ground_y = h * 0.88
     pot_top_y = h * 0.64
@@ -46,7 +47,7 @@ def draw_plant_on_canvas(canvas, alive=True, dark_mode=False, w=130, h=130):
     pot_bot_w = w * 0.28
 
     if not dark_mode:
-        bg_col = CARD_BG
+        bg_col = CARD_SURFACE
         pot_color = "#d5cdc2"
         pot_outline = "#b5aa9b"
         soil_color = "#6e6255"
@@ -92,14 +93,14 @@ def draw_plant_on_canvas(canvas, alive=True, dark_mode=False, w=130, h=130):
     )
 
     # Pot Rim
-    rim_pad = 4
-    rim_h = 8
+    rim_pad = 4 * s
+    rim_h = 8 * s
     rx0, ry0 = p_tl[0] - rim_pad, pot_top_y - rim_h / 2.0
     rx1, ry1 = p_tr[0] + rim_pad, pot_top_y + rim_h / 2.0
     canvas.create_rectangle(rx0, ry0, rx1, ry1, fill=pot_color, outline=pot_outline, width=2)
 
     # Soil line
-    canvas.create_line(p_tl[0] + 3, pot_top_y, p_tr[0] - 3, pot_top_y, fill=soil_color, width=2)
+    canvas.create_line(p_tl[0] + 3 * s, pot_top_y, p_tr[0] - 3 * s, pot_top_y, fill=soil_color, width=2)
 
     # 2. Plant Stem and Leaves
     if alive:
@@ -107,7 +108,7 @@ def draw_plant_on_canvas(canvas, alive=True, dark_mode=False, w=130, h=130):
         stem_pts = []
         for t in range(25):
             prog = t / 24.0
-            sx = cx + math.sin(prog * math.pi) * 7.0
+            sx = cx + math.sin(prog * math.pi) * (7.0 * s)
             sy = pot_top_y - prog * (h * 0.44)
             stem_pts.extend([sx, sy])
         canvas.create_line(*stem_pts, fill=stem_color, width=3.5, capstyle="round", smooth=True)
@@ -131,26 +132,26 @@ def draw_plant_on_canvas(canvas, alive=True, dark_mode=False, w=130, h=130):
                 smooth=True
             )
 
-        draw_alive_leaf(cx - 3, pot_top_y - 16, 145, 30, 12)
-        draw_alive_leaf(cx + 7, pot_top_y - 24, 35, 32, 13)
-        draw_alive_leaf(cx - 2, pot_top_y - 36, 150, 26, 11)
-        draw_alive_leaf(cx + 6, pot_top_y - 46, 30, 28, 11)
-        draw_alive_leaf(cx + 2, pot_top_y - 56, 80, 22, 9)
-        draw_alive_leaf(cx - 2, pot_top_y - 56, 100, 22, 9)
+        draw_alive_leaf(cx - 3 * s, pot_top_y - 16 * s, 145, 30 * s, 12 * s)
+        draw_alive_leaf(cx + 7 * s, pot_top_y - 24 * s, 35, 32 * s, 13 * s)
+        draw_alive_leaf(cx - 2 * s, pot_top_y - 36 * s, 150, 26 * s, 11 * s)
+        draw_alive_leaf(cx + 6 * s, pot_top_y - 46 * s, 30, 28 * s, 11 * s)
+        draw_alive_leaf(cx + 2 * s, pot_top_y - 56 * s, 80, 22 * s, 9 * s)
+        draw_alive_leaf(cx - 2 * s, pot_top_y - 56 * s, 100, 22 * s, 9 * s)
 
         # Subtle gold sparkle near top
-        sp_x = cx + 24
-        sp_y = pot_top_y - 54
-        canvas.create_line(sp_x - 4, sp_y, sp_x + 4, sp_y, fill=sparkle_color, width=2)
-        canvas.create_line(sp_x, sp_y - 4, sp_x, sp_y + 4, fill=sparkle_color, width=2)
+        sp_x = cx + 24 * s
+        sp_y = pot_top_y - 54 * s
+        canvas.create_line(sp_x - 4 * s, sp_y, sp_x + 4 * s, sp_y, fill=sparkle_color, width=2)
+        canvas.create_line(sp_x, sp_y - 4 * s, sp_x, sp_y + 4 * s, fill=sparkle_color, width=2)
 
     else:
         # --- Wilted / Drooping Plant ---
         stem_pts = []
         for t in range(25):
             prog = t / 24.0
-            sx = cx + prog * 28.0
-            sy = pot_top_y - math.sin(prog * math.pi * 0.7) * 15.0 + (prog ** 2) * 26.0
+            sx = cx + prog * (28.0 * s)
+            sy = pot_top_y - math.sin(prog * math.pi * 0.7) * (15.0 * s) + (prog ** 2) * (26.0 * s)
             stem_pts.extend([sx, sy])
         canvas.create_line(*stem_pts, fill=stem_color, width=3.5, capstyle="round", smooth=True)
 
@@ -173,15 +174,15 @@ def draw_plant_on_canvas(canvas, alive=True, dark_mode=False, w=130, h=130):
                 smooth=True
             )
 
-        draw_droop_leaf(cx + 10, pot_top_y - 6, 75, 24, 9)
-        draw_droop_leaf(cx + 20, pot_top_y + 2, 85, 26, 10)
+        draw_droop_leaf(cx + 10 * s, pot_top_y - 6 * s, 75, 24 * s, 9 * s)
+        draw_droop_leaf(cx + 20 * s, pot_top_y + 2 * s, 85, 26 * s, 10 * s)
         tip_x, tip_y = stem_pts[-2], stem_pts[-1]
-        draw_droop_leaf(tip_x, tip_y, 80, 22, 9)
+        draw_droop_leaf(tip_x, tip_y, 80, 22 * s, 9 * s)
 
         # Fallen dry leaf on the ground
-        fallen_x = cx - 26
-        fallen_y = ground_y - 2
-        draw_droop_leaf(fallen_x, fallen_y, 10, 18, 6)
+        fallen_x = cx - 26 * s
+        fallen_y = ground_y - 2 * s
+        draw_droop_leaf(fallen_x, fallen_y, 10, 18 * s, 6 * s)
 
 
 class BookshelfApp(ctk.CTk):
@@ -189,8 +190,8 @@ class BookshelfApp(ctk.CTk):
         super().__init__()
 
         self.title("Kirjateline • Lukuseuranta")
-        self.geometry("680x560")
-        self.minsize(560, 480)
+        self.geometry("680x480")
+        self.minsize(460, 300)
         self.attributes("-fullscreen", True)
         self.configure(fg_color=BG_COLOR)
 
@@ -203,8 +204,8 @@ class BookshelfApp(ctk.CTk):
 
         # Kasvin tila: alussa kuihtunut, muuttuu eläväksi kun sivumäärää päivitetään
         self.is_plant_alive = False
-        self.plant_w = 125
-        self.plant_h = 125
+        self.plant_w = 110
+        self.plant_h = 110
 
         # UI State: "summary" or "numpad"
         self.current_view_mode = "summary"
@@ -356,7 +357,7 @@ class BookshelfApp(ctk.CTk):
 
         # 3. MAIN BODY CONTAINER
         self.body_container = ctk.CTkFrame(self, fg_color="transparent")
-        self.body_container.pack(fill="both", expand=True, padx=28, pady=18)
+        self.body_container.pack(fill="both", expand=True, padx=24, pady=12)
 
         # Main Card
         self.main_card = ctk.CTkFrame(
@@ -377,11 +378,11 @@ class BookshelfApp(ctk.CTk):
         self._build_numpad_view()
 
         # Start with summary view visible
-        self.summary_frame.pack(fill="both", expand=True, padx=30, pady=22)
+        self.summary_frame.pack(fill="both", expand=True, padx=24, pady=16)
 
     def _build_summary_view(self):
-        """Standard reading overview with native Canvas plant illustration in the center."""
-        # Stat Card (Clean neutral tone box)
+        """Standard reading overview with native Canvas plant inside the gray stat box."""
+        # Stat Card (Clean neutral tone box containing current page, plant in middle, and %)
         self.stat_box = ctk.CTkFrame(
             self.summary_frame,
             fg_color=CARD_SURFACE,
@@ -389,10 +390,10 @@ class BookshelfApp(ctk.CTk):
             border_width=1,
             border_color=BORDER_COLOR
         )
-        self.stat_box.pack(fill="x", pady=(0, 10))
+        self.stat_box.pack(fill="both", expand=True, pady=(0, 12))
 
         stat_inner = ctk.CTkFrame(self.stat_box, fg_color="transparent")
-        stat_inner.pack(fill="x", padx=26, pady=16)
+        stat_inner.pack(fill="both", expand=True, padx=24, pady=10)
 
         left_stat = ctk.CTkFrame(stat_inner, fg_color="transparent")
         left_stat.pack(side="left")
@@ -440,25 +441,22 @@ class BookshelfApp(ctk.CTk):
         )
         self.hero_rem_lbl.pack(anchor="e")
 
-        # --- CENTER PLANT DISPLAY (Native tk.Canvas - no PIL.ImageTk needed) ---
-        self.plant_frame = ctk.CTkFrame(self.summary_frame, fg_color="transparent")
-        self.plant_frame.pack(fill="both", expand=True, pady=(2, 8))
-
+        # --- CENTER PLANT INSIDE THE SAME GRAY BOX (Native tk.Canvas) ---
         self.plant_canvas = tk.Canvas(
-            self.plant_frame,
+            stat_inner,
             width=self.plant_w,
             height=self.plant_h,
-            bg=CARD_BG,
+            bg=CARD_SURFACE,
             highlightthickness=0,
             bd=0
         )
-        self.plant_canvas.pack(expand=True)
+        self.plant_canvas.pack(side="left", expand=True)
 
         # "Päivitä sivu, jolla olet" Button
         self.add_pages_btn = ctk.CTkButton(
             self.summary_frame,
             text="Päivitä sivu, jolla olet",
-            height=50,
+            height=48,
             corner_radius=12,
             fg_color=ACCENT_DARK,
             hover_color=ACCENT_DARK_HOVER,
@@ -466,7 +464,7 @@ class BookshelfApp(ctk.CTk):
             font=ctk.CTkFont(size=15, weight="bold"),
             command=self._show_numpad_for_current_page
         )
-        self.add_pages_btn.pack(fill="x", pady=(0, 4))
+        self.add_pages_btn.pack(fill="x", pady=(0, 2))
 
     def _build_numpad_view(self):
         """Pure on-screen touch numpad directly in the same window (no separate popup windows)."""
@@ -630,7 +628,7 @@ class BookshelfApp(ctk.CTk):
     def _show_summary_view(self):
         """Transitions back to the reading summary card."""
         self.numpad_frame.pack_forget()
-        self.summary_frame.pack(fill="both", expand=True, padx=30, pady=22)
+        self.summary_frame.pack(fill="both", expand=True, padx=24, pady=16)
         self.current_view_mode = "summary"
 
     def _update_numpad_display(self):
