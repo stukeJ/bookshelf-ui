@@ -81,16 +81,16 @@ def create_plant_image(alive=True, dark_mode=False, size=(130, 130)):
     p_tr = (cx + pot_top_w // 2, pot_top_y)
     p_br = (cx + pot_bot_w // 2, ground_y)
     p_bl = (cx - pot_bot_w // 2, ground_y)
-    draw.polygon([p_tl, p_tr, p_br, p_bl], fill=pot_color, outline=pot_outline, width=scale * 2)
+    draw.polygon([p_tl, p_tr, p_br, p_bl], fill=pot_color)
+    draw.line([p_tl, p_tr, p_br, p_bl, p_tl], fill=pot_outline, width=scale * 2)
 
-    # Pot Rim (supports older Pillow on Python 3.7 as well as newer Pillow)
+    # Pot Rim (drawn with fill + line outline so no width argument is passed to polygon/rectangle)
     rim_pad = scale * 4
     rim_h = scale * 8
-    rim_box = [p_tl[0] - rim_pad, pot_top_y - rim_h // 2, p_tr[0] + rim_pad, pot_top_y + rim_h // 2]
-    if hasattr(draw, "rounded_rectangle"):
-        draw.rounded_rectangle(rim_box, radius=scale * 3, fill=pot_color, outline=pot_outline, width=scale * 2)
-    else:
-        draw.rectangle(rim_box, fill=pot_color, outline=pot_outline, width=scale * 2)
+    rx0, ry0 = p_tl[0] - rim_pad, pot_top_y - rim_h // 2
+    rx1, ry1 = p_tr[0] + rim_pad, pot_top_y + rim_h // 2
+    draw.rectangle([rx0, ry0, rx1, ry1], fill=pot_color)
+    draw.line([(rx0, ry0), (rx1, ry0), (rx1, ry1), (rx0, ry1), (rx0, ry0)], fill=pot_outline, width=scale * 2)
 
     # Soil line
     draw.line([(p_tl[0] + scale * 3, pot_top_y), (p_tr[0] - scale * 3, pot_top_y)], fill=soil_color, width=scale * 2)
