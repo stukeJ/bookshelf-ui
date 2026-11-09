@@ -1,5 +1,7 @@
 import customtkinter as ctk
 import time
+import math
+from PIL import Image, ImageDraw
 
 # Set light appearance mode for normal reading view
 ctk.set_appearance_mode("Light")
@@ -30,6 +32,143 @@ STANDBY_TEXT_PAGES = "#e5e5e5"# Crisp stats text in the dark
 IDLE_TIMEOUT_SECONDS = 15     # 15s inactivity triggers black standby screen
 
 
+def create_plant_image(alive=True, dark_mode=False, size=(130, 130)):
+    """
+    Renders an aesthetic minimalist potted plant using Pillow ImageDraw.
+    Super-samples at 3x for crisp, anti-aliased curves without any extra assets.
+    """
+    scale = 3
+    w, h = size[0] * scale, size[1] * scale
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    cx = w // 2
+    ground_y = int(h * 0.88)
+    pot_top_y = int(h * 0.64)
+    pot_top_w = int(w * 0.40)
+    pot_bot_w = int(w * 0.28)
+
+    # Palette
+    if not dark_mode:
+        pot_color = "#d5cdc2"
+        pot_outline = "#b5aa9b"
+        soil_color = "#6e6255"
+        if alive:
+            stem_color = "#386641"
+            leaf_fill = "#52b788"
+            leaf_stroke = "#2d6a4f"
+            sparkle_color = "#b3823c"
+        else:
+            stem_color = "#7d7465"
+            leaf_fill = "#9c9284"
+            leaf_stroke = "#6b6355"
+    else:  # Standby / dark mode
+        pot_color = "#24221f"
+        pot_outline = "#423d37"
+        soil_color = "#181614"
+        if alive:
+            stem_color = "#40916c"
+            leaf_fill = "#52b788"
+            leaf_stroke = "#74c69d"
+            sparkle_color = "#e0a96d"
+        else:
+            stem_color = "#5c564c"
+            leaf_fill = "#736b5f"
+            leaf_stroke = "#8c8273"
+
+    # 1. Ceramic Pot Body (Tapered)
+    p_tl = (cx - pot_top_w // 2, pot_top_y)
+    p_tr = (cx + pot_top_w // 2, pot_top_y)
+    p_br = (cx + pot_bot_w // 2, ground_y)
+    p_bl = (cx - pot_bot_w // 2, ground_y)
+    draw.polygon([p_tl, p_tr, p_br, p_bl], fill=pot_color, outline=pot_outline, width=scale * 2)
+
+    # Pot Rim
+    rim_pad = scale * 4
+    rim_h = scale * 8
+    draw.rounded_rectangle(
+        [p_tl[0] - rim_pad, pot_top_y - rim_h // 2, p_tr[0] + rim_pad, pot_top_y + rim_h // 2],
+        radius=scale * 3,
+        fill=pot_color,
+        outline=pot_outline,
+        width=scale * 2
+    )
+
+    # Soil line
+    draw.line([(p_tl[0] + scale * 3, pot_top_y), (p_tr[0] - scale * 3, pot_top_y)], fill=soil_color, width=scale * 2)
+
+    # 2. Plant Stem and Leaves
+    stem_w = int(scale * 3.5)
+
+    if alive:
+        # --- Upright, Thriving Plant ---
+        stem_pts = []
+        for t in range(50):
+            prog = t / 49.0
+            sx = cx + math.sin(prog * math.pi) * (scale * 7)
+            sy = pot_top_y - prog * (h * 0.44)
+            stem_pts.append((sx, sy))
+        draw.line(stem_pts, fill=stem_color, width=stem_w, joint="curve")
+
+        def draw_alive_leaf(lx, ly, angle_deg, l_len, l_w):
+            rad = math.radians(angle_deg)
+            tx = lx + math.cos(rad) * l_len
+            ty = ly - math.sin(rad) * l_len
+            px = -math.sin(rad) * l_w
+            py = -math.cos(rad) * l_w
+            mid_x = (lx + tx) / 2
+            mid_y = (ly + ty) / 2
+            pts = [(lx, ly), (mid_x + px, mid_y + py), (tx, ty), (mid_x - px, mid_y - py)]
+            draw.polygon(pts, fill=leaf_fill, outline=leaf_stroke)
+
+        draw_alive_leaf(cx - scale * 3, pot_top_y - scale * 16, 145, scale * 30, scale * 12)
+        draw_alive_leaf(cx + scale * 7, pot_top_y - scale * 24, 35, scale * 32, scale * 13)
+        draw_alive_leaf(cx - scale * 2, pot_top_y - scale * 36, 150, scale * 26, scale * 11)
+        draw_alive_leaf(cx + scale * 6, pot_top_y - scale * 46, 30, scale * 28, scale * 11)
+        draw_alive_leaf(cx + scale * 2, pot_top_y - scale * 56, 80, scale * 22, scale * 9)
+        draw_alive_leaf(cx - scale * 2, pot_top_y - scale * 56, 100, scale * 22, scale * 9)
+
+        # Subtle gold sparkle near top
+        sp_x = cx + scale * 24
+        sp_y = pot_top_y - scale * 54
+        draw.line([(sp_x - scale * 4, sp_y), (sp_x + scale * 4, sp_y)], fill=sparkle_color, width=scale * 2)
+        draw.line([(sp_x, sp_y - scale * 4), (sp_x, sp_y + scale * 4)], fill=sparkle_color, width=scale * 2)
+
+    else:
+        # --- Wilted / Drooping Plant ---
+        stem_pts = []
+        for t in range(50):
+            prog = t / 49.0
+            sx = cx + prog * (scale * 28)
+            sy = pot_top_y - math.sin(prog * math.pi * 0.7) * (scale * 15) + (prog ** 2) * (scale * 26)
+            stem_pts.append((sx, sy))
+        draw.line(stem_pts, fill=stem_color, width=stem_w, joint="curve")
+
+        def draw_droop_leaf(lx, ly, angle_deg, l_len, l_w):
+            rad = math.radians(angle_deg)
+            tx = lx + math.cos(rad) * l_len
+            ty = ly + math.sin(rad) * l_len
+            px = -math.sin(rad) * l_w
+            py = math.cos(rad) * l_w
+            mid_x = (lx + tx) / 2
+            mid_y = (ly + ty) / 2
+            pts = [(lx, ly), (mid_x + px, mid_y + py), (tx, ty), (mid_x - px, mid_y - py)]
+            draw.polygon(pts, fill=leaf_fill, outline=leaf_stroke)
+
+        draw_droop_leaf(cx + scale * 10, pot_top_y - scale * 6, 75, scale * 24, scale * 9)
+        draw_droop_leaf(cx + scale * 20, pot_top_y + scale * 2, 85, scale * 26, scale * 10)
+        tip_x, tip_y = stem_pts[-1]
+        draw_droop_leaf(tip_x, tip_y, 80, scale * 22, scale * 9)
+
+        # Fallen dry leaf on the ground
+        fallen_x = cx - scale * 26
+        fallen_y = ground_y - scale * 2
+        draw_droop_leaf(fallen_x, fallen_y, 10, scale * 18, scale * 6)
+
+    resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+    return img.resize(size, resample_filter)
+
+
 class BookshelfApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -43,6 +182,30 @@ class BookshelfApp(ctk.CTk):
         # Single active book tracked directly
         self.current_page = 0
         self.total_pages = 350
+
+        # Lukuputki alkaa aina nollasta ilman kellointegraatiota
+        self.streak_count = 0
+
+        # Kasvin tila: alussa kuihtunut, muuttuu eläväksi kun sivumäärää päivitetään
+        self.is_plant_alive = False
+
+        # Pre-generate plant images for light & standby/sleep modes
+        self.plant_size = (125, 125)
+        self.img_wilted_light = create_plant_image(alive=False, dark_mode=False, size=self.plant_size)
+        self.img_wilted_dark = create_plant_image(alive=False, dark_mode=True, size=self.plant_size)
+        self.img_alive_light = create_plant_image(alive=True, dark_mode=False, size=self.plant_size)
+        self.img_alive_dark = create_plant_image(alive=True, dark_mode=True, size=self.plant_size)
+
+        self.ctk_plant_wilted = ctk.CTkImage(
+            light_image=self.img_wilted_light,
+            dark_image=self.img_wilted_dark,
+            size=self.plant_size
+        )
+        self.ctk_plant_alive = ctk.CTkImage(
+            light_image=self.img_alive_light,
+            dark_image=self.img_alive_dark,
+            size=self.plant_size
+        )
 
         # UI State: "summary" or "numpad"
         self.current_view_mode = "summary"
@@ -68,7 +231,7 @@ class BookshelfApp(ctk.CTk):
         self._schedule_idle_check()
 
     def _build_ui(self):
-        # 1. TOP HEADER (Left: "Uusi kirja", Right: Streak badge)
+        # 1. TOP HEADER (Left: "Uusi kirja", Right: Close & Streak badge)
         self.header_frame = ctk.CTkFrame(
             self,
             fg_color=CARD_BG,
@@ -115,7 +278,7 @@ class BookshelfApp(ctk.CTk):
         )
         self.close_btn.pack(side="right", padx=(0, 12), pady=15)
 
-        # --- STREAK BADGE (TOP-RIGHT, ONLY TEXT AND NUMBER) ---
+        # --- STREAK BADGE (TOP-RIGHT, ONLY TEXT AND NUMBER, STARTS AT 0) ---
         self.streak_badge = ctk.CTkFrame(
             self.header_frame,
             fg_color=STREAK_BG,
@@ -127,7 +290,7 @@ class BookshelfApp(ctk.CTk):
 
         self.streak_text = ctk.CTkLabel(
             self.streak_badge,
-            text="Putki: 7 päivää",
+            text="Putki: 0 päivää",
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color=STREAK_TEXT
         )
@@ -192,7 +355,7 @@ class BookshelfApp(ctk.CTk):
         )
         self.footer_sub_lbl.pack(anchor="w", pady=(3, 0))
 
-        # 3. MAIN BODY CONTAINER (Everything switches inside the same window)
+        # 3. MAIN BODY CONTAINER
         self.body_container = ctk.CTkFrame(self, fg_color="transparent")
         self.body_container.pack(fill="both", expand=True, padx=28, pady=18)
 
@@ -210,15 +373,15 @@ class BookshelfApp(ctk.CTk):
         self.summary_frame = ctk.CTkFrame(self.main_card, fg_color="transparent")
         self._build_summary_view()
 
-        # --- VIEW 2: Pure On-Screen Touch Numpad Frame (Used for both page update & new book) ---
+        # --- VIEW 2: Pure On-Screen Touch Numpad Frame ---
         self.numpad_frame = ctk.CTkFrame(self.main_card, fg_color="transparent")
         self._build_numpad_view()
 
         # Start with summary view visible
-        self.summary_frame.pack(fill="both", expand=True, padx=30, pady=26)
+        self.summary_frame.pack(fill="both", expand=True, padx=30, pady=22)
 
     def _build_summary_view(self):
-        """Standard reading overview with 'Päivitä sivu, jolla olet' button."""
+        """Standard reading overview with plant illustration in the center."""
         # Stat Card (Clean neutral tone box)
         self.stat_box = ctk.CTkFrame(
             self.summary_frame,
@@ -227,10 +390,10 @@ class BookshelfApp(ctk.CTk):
             border_width=1,
             border_color=BORDER_COLOR
         )
-        self.stat_box.pack(fill="x", pady=(0, 24))
+        self.stat_box.pack(fill="x", pady=(0, 14))
 
         stat_inner = ctk.CTkFrame(self.stat_box, fg_color="transparent")
-        stat_inner.pack(fill="x", padx=26, pady=20)
+        stat_inner.pack(fill="x", padx=26, pady=16)
 
         left_stat = ctk.CTkFrame(stat_inner, fg_color="transparent")
         left_stat.pack(side="left")
@@ -246,7 +409,7 @@ class BookshelfApp(ctk.CTk):
         self.hero_page_big = ctk.CTkLabel(
             left_stat,
             text="0",
-            font=ctk.CTkFont(size=42, weight="bold"),
+            font=ctk.CTkFont(size=38, weight="bold"),
             text_color=TEXT_PRIMARY
         )
         self.hero_page_big.pack(anchor="w")
@@ -265,7 +428,7 @@ class BookshelfApp(ctk.CTk):
         self.hero_pct_big = ctk.CTkLabel(
             right_stat,
             text="0%",
-            font=ctk.CTkFont(size=40, weight="bold"),
+            font=ctk.CTkFont(size=36, weight="bold"),
             text_color=ACCENT_DARK
         )
         self.hero_pct_big.pack(anchor="e")
@@ -278,11 +441,22 @@ class BookshelfApp(ctk.CTk):
         )
         self.hero_rem_lbl.pack(anchor="e")
 
+        # --- CENTER PLANT DISPLAY (Wilted initially, flourishes into alive plant upon update) ---
+        self.plant_frame = ctk.CTkFrame(self.summary_frame, fg_color="transparent")
+        self.plant_frame.pack(fill="both", expand=True, pady=(2, 10))
+
+        self.plant_label = ctk.CTkLabel(
+            self.plant_frame,
+            text="",
+            image=self.ctk_plant_wilted
+        )
+        self.plant_label.pack(expand=True)
+
         # "Päivitä sivu, jolla olet" Button
         self.add_pages_btn = ctk.CTkButton(
             self.summary_frame,
             text="Päivitä sivu, jolla olet",
-            height=52,
+            height=50,
             corner_radius=12,
             fg_color=ACCENT_DARK,
             hover_color=ACCENT_DARK_HOVER,
@@ -290,7 +464,7 @@ class BookshelfApp(ctk.CTk):
             font=ctk.CTkFont(size=15, weight="bold"),
             command=self._show_numpad_for_current_page
         )
-        self.add_pages_btn.pack(fill="x", pady=(4, 0))
+        self.add_pages_btn.pack(fill="x", pady=(0, 4))
 
     def _build_numpad_view(self):
         """Pure on-screen touch numpad directly in the same window (no separate popup windows)."""
@@ -378,7 +552,7 @@ class BookshelfApp(ctk.CTk):
         )
         cancel_btn.pack(fill="x")
 
-        # --- RIGHT COLUMN: Pure Touch Keypad Grid (no preset buttons) ---
+        # --- RIGHT COLUMN: Pure Touch Keypad Grid ---
         keys_col = ctk.CTkFrame(key_container, fg_color="transparent")
         keys_col.grid(row=0, column=1, sticky="nsew")
 
@@ -438,7 +612,7 @@ class BookshelfApp(ctk.CTk):
         self.current_view_mode = "numpad"
 
     def _show_numpad_for_new_book(self):
-        """Switches in-place to numpad for setting new book's total pages (same window, pure numpad)."""
+        """Switches in-place to numpad for setting new book's total pages."""
         self.numpad_mode = "total_pages"
         self.numpad_tag_lbl.configure(text="UUSI KIRJA • KOKONAISSIVUMÄÄRÄ")
         self.numpad_sub_lbl.configure(text="Kirjan sivumäärä yhteensä")
@@ -454,7 +628,7 @@ class BookshelfApp(ctk.CTk):
     def _show_summary_view(self):
         """Transitions back to the reading summary card."""
         self.numpad_frame.pack_forget()
-        self.summary_frame.pack(fill="both", expand=True, padx=30, pady=26)
+        self.summary_frame.pack(fill="both", expand=True, padx=30, pady=22)
         self.current_view_mode = "summary"
 
     def _update_numpad_display(self):
@@ -513,18 +687,24 @@ class BookshelfApp(ctk.CTk):
             if val > self.total_pages:
                 val = self.total_pages
             self.current_page = val
+            # Updating page brings the plant to life and raises streak to 1!
+            self.is_plant_alive = True
+            self.streak_count = 1
         else:
             if val <= 0:
                 return  # Must be positive page count
             self.total_pages = val
             self.current_page = 0
+            # New book starts fresh with wilted plant & streak at 0
+            self.is_plant_alive = False
+            self.streak_count = 0
 
         self._show_summary_view()
         self._refresh_all_views()
 
     # --- 4. 15-SECOND BLACK STANDBY SCREEN SAVER ---
     def _build_standby_overlay(self):
-        """Full-screen pitch black standby overlay with only a large clean progress bar."""
+        """Full-screen pitch black standby overlay with plant and large clean progress bar."""
         self.standby_frame = ctk.CTkFrame(
             self,
             fg_color=STANDBY_BG,
@@ -533,6 +713,14 @@ class BookshelfApp(ctk.CTk):
 
         center_box = ctk.CTkFrame(self.standby_frame, fg_color="transparent")
         center_box.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Plant also visible in sleep mode
+        self.standby_plant_lbl = ctk.CTkLabel(
+            center_box,
+            text="",
+            image=self.ctk_plant_wilted
+        )
+        self.standby_plant_lbl.pack(pady=(0, 18))
 
         # Big, sleek progress bar in center
         self.standby_progress = ctk.CTkProgressBar(
@@ -555,12 +743,18 @@ class BookshelfApp(ctk.CTk):
         self.standby_stats.pack()
 
     def _enter_standby(self):
-        """Activates pitch black standby screen with large progress bar."""
+        """Activates pitch black standby screen with plant and large progress bar."""
         if not self.is_standby:
             self.is_standby = True
             pct = (self.current_page / self.total_pages * 100) if self.total_pages > 0 else 0
             self.standby_stats.configure(text=f"{self.current_page} / {self.total_pages} sivua  •  {pct:.0f}%")
             self.standby_progress.set(min(1.0, self.current_page / max(1, self.total_pages)))
+
+            # Update standby plant image
+            if self.is_plant_alive:
+                self.standby_plant_lbl.configure(image=self.ctk_plant_alive)
+            else:
+                self.standby_plant_lbl.configure(image=self.ctk_plant_wilted)
 
             self.standby_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
             self.standby_frame.lift()
@@ -642,6 +836,20 @@ class BookshelfApp(ctk.CTk):
             self.hero_rem_lbl.configure(text="Valmis! Luettu loppuun", text_color="#15803d")
         else:
             self.hero_rem_lbl.configure(text=f"{left} sivua jäljellä", text_color=TEXT_MUTED)
+
+        # Update Center Plant image (wilted vs alive)
+        if self.is_plant_alive:
+            self.plant_label.configure(image=self.ctk_plant_alive)
+            self.standby_plant_lbl.configure(image=self.ctk_plant_alive)
+        else:
+            self.plant_label.configure(image=self.ctk_plant_wilted)
+            self.standby_plant_lbl.configure(image=self.ctk_plant_wilted)
+
+        # Update Streak Badge (starts at 0, rises to 1 on update)
+        if self.streak_count == 1:
+            self.streak_text.configure(text="Putki: 1 päivä")
+        else:
+            self.streak_text.configure(text=f"Putki: {self.streak_count} päivää")
 
         # Update Bottom Persistent Progress Bar
         self.footer_title_lbl.configure(text=f"Edistyminen: {cur} / {total} sivua")
