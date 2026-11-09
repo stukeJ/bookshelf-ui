@@ -83,16 +83,14 @@ def create_plant_image(alive=True, dark_mode=False, size=(130, 130)):
     p_bl = (cx - pot_bot_w // 2, ground_y)
     draw.polygon([p_tl, p_tr, p_br, p_bl], fill=pot_color, outline=pot_outline, width=scale * 2)
 
-    # Pot Rim
+    # Pot Rim (supports older Pillow on Python 3.7 as well as newer Pillow)
     rim_pad = scale * 4
     rim_h = scale * 8
-    draw.rounded_rectangle(
-        [p_tl[0] - rim_pad, pot_top_y - rim_h // 2, p_tr[0] + rim_pad, pot_top_y + rim_h // 2],
-        radius=scale * 3,
-        fill=pot_color,
-        outline=pot_outline,
-        width=scale * 2
-    )
+    rim_box = [p_tl[0] - rim_pad, pot_top_y - rim_h // 2, p_tr[0] + rim_pad, pot_top_y + rim_h // 2]
+    if hasattr(draw, "rounded_rectangle"):
+        draw.rounded_rectangle(rim_box, radius=scale * 3, fill=pot_color, outline=pot_outline, width=scale * 2)
+    else:
+        draw.rectangle(rim_box, fill=pot_color, outline=pot_outline, width=scale * 2)
 
     # Soil line
     draw.line([(p_tl[0] + scale * 3, pot_top_y), (p_tr[0] - scale * 3, pot_top_y)], fill=soil_color, width=scale * 2)
@@ -108,7 +106,7 @@ def create_plant_image(alive=True, dark_mode=False, size=(130, 130)):
             sx = cx + math.sin(prog * math.pi) * (scale * 7)
             sy = pot_top_y - prog * (h * 0.44)
             stem_pts.append((sx, sy))
-        draw.line(stem_pts, fill=stem_color, width=stem_w, joint="curve")
+        draw.line(stem_pts, fill=stem_color, width=stem_w)
 
         def draw_alive_leaf(lx, ly, angle_deg, l_len, l_w):
             rad = math.radians(angle_deg)
@@ -142,7 +140,7 @@ def create_plant_image(alive=True, dark_mode=False, size=(130, 130)):
             sx = cx + prog * (scale * 28)
             sy = pot_top_y - math.sin(prog * math.pi * 0.7) * (scale * 15) + (prog ** 2) * (scale * 26)
             stem_pts.append((sx, sy))
-        draw.line(stem_pts, fill=stem_color, width=stem_w, joint="curve")
+        draw.line(stem_pts, fill=stem_color, width=stem_w)
 
         def draw_droop_leaf(lx, ly, angle_deg, l_len, l_w):
             rad = math.radians(angle_deg)
@@ -165,7 +163,12 @@ def create_plant_image(alive=True, dark_mode=False, size=(130, 130)):
         fallen_y = ground_y - scale * 2
         draw_droop_leaf(fallen_x, fallen_y, 10, scale * 18, scale * 6)
 
-    resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+    if hasattr(Image, "Resampling"):
+        resample_filter = Image.Resampling.LANCZOS
+    elif hasattr(Image, "LANCZOS"):
+        resample_filter = Image.LANCZOS
+    else:
+        resample_filter = getattr(Image, "ANTIALIAS", 1)
     return img.resize(size, resample_filter)
 
 
