@@ -1,7 +1,7 @@
+import tkinter as tk
 import customtkinter as ctk
 import time
 import math
-from PIL import Image, ImageDraw
 
 # Set light appearance mode for normal reading view
 ctk.set_appearance_mode("Light")
@@ -32,24 +32,21 @@ STANDBY_TEXT_PAGES = "#e5e5e5"# Crisp stats text in the dark
 IDLE_TIMEOUT_SECONDS = 15     # 15s inactivity triggers black standby screen
 
 
-def create_plant_image(alive=True, dark_mode=False, size=(130, 130)):
+def draw_plant_on_canvas(canvas, alive=True, dark_mode=False, w=130, h=130):
     """
-    Renders an aesthetic minimalist potted plant using Pillow ImageDraw.
-    Super-samples at 3x for crisp, anti-aliased curves without any extra assets.
+    Draws an aesthetic minimalist potted plant directly onto a native tkinter.Canvas.
+    Requires zero PIL / ImageTk dependencies and runs natively on Python 3.7.3.
     """
-    scale = 3
-    w, h = size[0] * scale, size[1] * scale
-    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
+    canvas.delete("all")
 
-    cx = w // 2
-    ground_y = int(h * 0.88)
-    pot_top_y = int(h * 0.64)
-    pot_top_w = int(w * 0.40)
-    pot_bot_w = int(w * 0.28)
+    cx = w / 2.0
+    ground_y = h * 0.88
+    pot_top_y = h * 0.64
+    pot_top_w = w * 0.40
+    pot_bot_w = w * 0.28
 
-    # Palette
     if not dark_mode:
+        bg_col = CARD_BG
         pot_color = "#d5cdc2"
         pot_outline = "#b5aa9b"
         soil_color = "#6e6255"
@@ -62,7 +59,8 @@ def create_plant_image(alive=True, dark_mode=False, size=(130, 130)):
             stem_color = "#7d7465"
             leaf_fill = "#9c9284"
             leaf_stroke = "#6b6355"
-    else:  # Standby / dark mode
+    else:  # Standby / sleep mode
+        bg_col = STANDBY_BG
         pot_color = "#24221f"
         pot_outline = "#423d37"
         soil_color = "#181614"
@@ -76,37 +74,43 @@ def create_plant_image(alive=True, dark_mode=False, size=(130, 130)):
             leaf_fill = "#736b5f"
             leaf_stroke = "#8c8273"
 
-    # 1. Ceramic Pot Body (Tapered)
-    p_tl = (cx - pot_top_w // 2, pot_top_y)
-    p_tr = (cx + pot_top_w // 2, pot_top_y)
-    p_br = (cx + pot_bot_w // 2, ground_y)
-    p_bl = (cx - pot_bot_w // 2, ground_y)
-    draw.polygon([p_tl, p_tr, p_br, p_bl], fill=pot_color)
-    draw.line([p_tl, p_tr, p_br, p_bl, p_tl], fill=pot_outline, width=scale * 2)
+    canvas.configure(bg=bg_col)
 
-    # Pot Rim (drawn with fill + line outline so no width argument is passed to polygon/rectangle)
-    rim_pad = scale * 4
-    rim_h = scale * 8
-    rx0, ry0 = p_tl[0] - rim_pad, pot_top_y - rim_h // 2
-    rx1, ry1 = p_tr[0] + rim_pad, pot_top_y + rim_h // 2
-    draw.rectangle([rx0, ry0, rx1, ry1], fill=pot_color)
-    draw.line([(rx0, ry0), (rx1, ry0), (rx1, ry1), (rx0, ry1), (rx0, ry0)], fill=pot_outline, width=scale * 2)
+    # 1. Ceramic Pot Body (Tapered)
+    p_tl = (cx - pot_top_w / 2.0, pot_top_y)
+    p_tr = (cx + pot_top_w / 2.0, pot_top_y)
+    p_br = (cx + pot_bot_w / 2.0, ground_y)
+    p_bl = (cx - pot_bot_w / 2.0, ground_y)
+    canvas.create_polygon(
+        p_tl[0], p_tl[1],
+        p_tr[0], p_tr[1],
+        p_br[0], p_br[1],
+        p_bl[0], p_bl[1],
+        fill=pot_color,
+        outline=pot_outline,
+        width=2
+    )
+
+    # Pot Rim
+    rim_pad = 4
+    rim_h = 8
+    rx0, ry0 = p_tl[0] - rim_pad, pot_top_y - rim_h / 2.0
+    rx1, ry1 = p_tr[0] + rim_pad, pot_top_y + rim_h / 2.0
+    canvas.create_rectangle(rx0, ry0, rx1, ry1, fill=pot_color, outline=pot_outline, width=2)
 
     # Soil line
-    draw.line([(p_tl[0] + scale * 3, pot_top_y), (p_tr[0] - scale * 3, pot_top_y)], fill=soil_color, width=scale * 2)
+    canvas.create_line(p_tl[0] + 3, pot_top_y, p_tr[0] - 3, pot_top_y, fill=soil_color, width=2)
 
     # 2. Plant Stem and Leaves
-    stem_w = int(scale * 3.5)
-
     if alive:
         # --- Upright, Thriving Plant ---
         stem_pts = []
-        for t in range(50):
-            prog = t / 49.0
-            sx = cx + math.sin(prog * math.pi) * (scale * 7)
+        for t in range(25):
+            prog = t / 24.0
+            sx = cx + math.sin(prog * math.pi) * 7.0
             sy = pot_top_y - prog * (h * 0.44)
-            stem_pts.append((sx, sy))
-        draw.line(stem_pts, fill=stem_color, width=stem_w)
+            stem_pts.extend([sx, sy])
+        canvas.create_line(*stem_pts, fill=stem_color, width=3.5, capstyle="round", smooth=True)
 
         def draw_alive_leaf(lx, ly, angle_deg, l_len, l_w):
             rad = math.radians(angle_deg)
@@ -114,33 +118,41 @@ def create_plant_image(alive=True, dark_mode=False, size=(130, 130)):
             ty = ly - math.sin(rad) * l_len
             px = -math.sin(rad) * l_w
             py = -math.cos(rad) * l_w
-            mid_x = (lx + tx) / 2
-            mid_y = (ly + ty) / 2
-            pts = [(lx, ly), (mid_x + px, mid_y + py), (tx, ty), (mid_x - px, mid_y - py)]
-            draw.polygon(pts, fill=leaf_fill, outline=leaf_stroke)
+            mid_x = (lx + tx) / 2.0
+            mid_y = (ly + ty) / 2.0
+            canvas.create_polygon(
+                lx, ly,
+                mid_x + px, mid_y + py,
+                tx, ty,
+                mid_x - px, mid_y - py,
+                fill=leaf_fill,
+                outline=leaf_stroke,
+                width=1.5,
+                smooth=True
+            )
 
-        draw_alive_leaf(cx - scale * 3, pot_top_y - scale * 16, 145, scale * 30, scale * 12)
-        draw_alive_leaf(cx + scale * 7, pot_top_y - scale * 24, 35, scale * 32, scale * 13)
-        draw_alive_leaf(cx - scale * 2, pot_top_y - scale * 36, 150, scale * 26, scale * 11)
-        draw_alive_leaf(cx + scale * 6, pot_top_y - scale * 46, 30, scale * 28, scale * 11)
-        draw_alive_leaf(cx + scale * 2, pot_top_y - scale * 56, 80, scale * 22, scale * 9)
-        draw_alive_leaf(cx - scale * 2, pot_top_y - scale * 56, 100, scale * 22, scale * 9)
+        draw_alive_leaf(cx - 3, pot_top_y - 16, 145, 30, 12)
+        draw_alive_leaf(cx + 7, pot_top_y - 24, 35, 32, 13)
+        draw_alive_leaf(cx - 2, pot_top_y - 36, 150, 26, 11)
+        draw_alive_leaf(cx + 6, pot_top_y - 46, 30, 28, 11)
+        draw_alive_leaf(cx + 2, pot_top_y - 56, 80, 22, 9)
+        draw_alive_leaf(cx - 2, pot_top_y - 56, 100, 22, 9)
 
         # Subtle gold sparkle near top
-        sp_x = cx + scale * 24
-        sp_y = pot_top_y - scale * 54
-        draw.line([(sp_x - scale * 4, sp_y), (sp_x + scale * 4, sp_y)], fill=sparkle_color, width=scale * 2)
-        draw.line([(sp_x, sp_y - scale * 4), (sp_x, sp_y + scale * 4)], fill=sparkle_color, width=scale * 2)
+        sp_x = cx + 24
+        sp_y = pot_top_y - 54
+        canvas.create_line(sp_x - 4, sp_y, sp_x + 4, sp_y, fill=sparkle_color, width=2)
+        canvas.create_line(sp_x, sp_y - 4, sp_x, sp_y + 4, fill=sparkle_color, width=2)
 
     else:
         # --- Wilted / Drooping Plant ---
         stem_pts = []
-        for t in range(50):
-            prog = t / 49.0
-            sx = cx + prog * (scale * 28)
-            sy = pot_top_y - math.sin(prog * math.pi * 0.7) * (scale * 15) + (prog ** 2) * (scale * 26)
-            stem_pts.append((sx, sy))
-        draw.line(stem_pts, fill=stem_color, width=stem_w)
+        for t in range(25):
+            prog = t / 24.0
+            sx = cx + prog * 28.0
+            sy = pot_top_y - math.sin(prog * math.pi * 0.7) * 15.0 + (prog ** 2) * 26.0
+            stem_pts.extend([sx, sy])
+        canvas.create_line(*stem_pts, fill=stem_color, width=3.5, capstyle="round", smooth=True)
 
         def draw_droop_leaf(lx, ly, angle_deg, l_len, l_w):
             rad = math.radians(angle_deg)
@@ -148,28 +160,28 @@ def create_plant_image(alive=True, dark_mode=False, size=(130, 130)):
             ty = ly + math.sin(rad) * l_len
             px = -math.sin(rad) * l_w
             py = math.cos(rad) * l_w
-            mid_x = (lx + tx) / 2
-            mid_y = (ly + ty) / 2
-            pts = [(lx, ly), (mid_x + px, mid_y + py), (tx, ty), (mid_x - px, mid_y - py)]
-            draw.polygon(pts, fill=leaf_fill, outline=leaf_stroke)
+            mid_x = (lx + tx) / 2.0
+            mid_y = (ly + ty) / 2.0
+            canvas.create_polygon(
+                lx, ly,
+                mid_x + px, mid_y + py,
+                tx, ty,
+                mid_x - px, mid_y - py,
+                fill=leaf_fill,
+                outline=leaf_stroke,
+                width=1.5,
+                smooth=True
+            )
 
-        draw_droop_leaf(cx + scale * 10, pot_top_y - scale * 6, 75, scale * 24, scale * 9)
-        draw_droop_leaf(cx + scale * 20, pot_top_y + scale * 2, 85, scale * 26, scale * 10)
-        tip_x, tip_y = stem_pts[-1]
-        draw_droop_leaf(tip_x, tip_y, 80, scale * 22, scale * 9)
+        draw_droop_leaf(cx + 10, pot_top_y - 6, 75, 24, 9)
+        draw_droop_leaf(cx + 20, pot_top_y + 2, 85, 26, 10)
+        tip_x, tip_y = stem_pts[-2], stem_pts[-1]
+        draw_droop_leaf(tip_x, tip_y, 80, 22, 9)
 
         # Fallen dry leaf on the ground
-        fallen_x = cx - scale * 26
-        fallen_y = ground_y - scale * 2
-        draw_droop_leaf(fallen_x, fallen_y, 10, scale * 18, scale * 6)
-
-    if hasattr(Image, "Resampling"):
-        resample_filter = Image.Resampling.LANCZOS
-    elif hasattr(Image, "LANCZOS"):
-        resample_filter = Image.LANCZOS
-    else:
-        resample_filter = getattr(Image, "ANTIALIAS", 1)
-    return img.resize(size, resample_filter)
+        fallen_x = cx - 26
+        fallen_y = ground_y - 2
+        draw_droop_leaf(fallen_x, fallen_y, 10, 18, 6)
 
 
 class BookshelfApp(ctk.CTk):
@@ -191,24 +203,8 @@ class BookshelfApp(ctk.CTk):
 
         # Kasvin tila: alussa kuihtunut, muuttuu eläväksi kun sivumäärää päivitetään
         self.is_plant_alive = False
-
-        # Pre-generate plant images for light & standby/sleep modes
-        self.plant_size = (125, 125)
-        self.img_wilted_light = create_plant_image(alive=False, dark_mode=False, size=self.plant_size)
-        self.img_wilted_dark = create_plant_image(alive=False, dark_mode=True, size=self.plant_size)
-        self.img_alive_light = create_plant_image(alive=True, dark_mode=False, size=self.plant_size)
-        self.img_alive_dark = create_plant_image(alive=True, dark_mode=True, size=self.plant_size)
-
-        self.ctk_plant_wilted = ctk.CTkImage(
-            light_image=self.img_wilted_light,
-            dark_image=self.img_wilted_dark,
-            size=self.plant_size
-        )
-        self.ctk_plant_alive = ctk.CTkImage(
-            light_image=self.img_alive_light,
-            dark_image=self.img_alive_dark,
-            size=self.plant_size
-        )
+        self.plant_w = 125
+        self.plant_h = 125
 
         # UI State: "summary" or "numpad"
         self.current_view_mode = "summary"
@@ -384,7 +380,7 @@ class BookshelfApp(ctk.CTk):
         self.summary_frame.pack(fill="both", expand=True, padx=30, pady=22)
 
     def _build_summary_view(self):
-        """Standard reading overview with plant illustration in the center."""
+        """Standard reading overview with native Canvas plant illustration in the center."""
         # Stat Card (Clean neutral tone box)
         self.stat_box = ctk.CTkFrame(
             self.summary_frame,
@@ -393,7 +389,7 @@ class BookshelfApp(ctk.CTk):
             border_width=1,
             border_color=BORDER_COLOR
         )
-        self.stat_box.pack(fill="x", pady=(0, 14))
+        self.stat_box.pack(fill="x", pady=(0, 10))
 
         stat_inner = ctk.CTkFrame(self.stat_box, fg_color="transparent")
         stat_inner.pack(fill="x", padx=26, pady=16)
@@ -444,16 +440,19 @@ class BookshelfApp(ctk.CTk):
         )
         self.hero_rem_lbl.pack(anchor="e")
 
-        # --- CENTER PLANT DISPLAY (Wilted initially, flourishes into alive plant upon update) ---
+        # --- CENTER PLANT DISPLAY (Native tk.Canvas - no PIL.ImageTk needed) ---
         self.plant_frame = ctk.CTkFrame(self.summary_frame, fg_color="transparent")
-        self.plant_frame.pack(fill="both", expand=True, pady=(2, 10))
+        self.plant_frame.pack(fill="both", expand=True, pady=(2, 8))
 
-        self.plant_label = ctk.CTkLabel(
+        self.plant_canvas = tk.Canvas(
             self.plant_frame,
-            text="",
-            image=self.ctk_plant_wilted
+            width=self.plant_w,
+            height=self.plant_h,
+            bg=CARD_BG,
+            highlightthickness=0,
+            bd=0
         )
-        self.plant_label.pack(expand=True)
+        self.plant_canvas.pack(expand=True)
 
         # "Päivitä sivu, jolla olet" Button
         self.add_pages_btn = ctk.CTkButton(
@@ -717,13 +716,16 @@ class BookshelfApp(ctk.CTk):
         center_box = ctk.CTkFrame(self.standby_frame, fg_color="transparent")
         center_box.place(relx=0.5, rely=0.5, anchor="center")
 
-        # Plant also visible in sleep mode
-        self.standby_plant_lbl = ctk.CTkLabel(
+        # Plant also visible in sleep mode (native tk.Canvas)
+        self.standby_plant_canvas = tk.Canvas(
             center_box,
-            text="",
-            image=self.ctk_plant_wilted
+            width=self.plant_w,
+            height=self.plant_h,
+            bg=STANDBY_BG,
+            highlightthickness=0,
+            bd=0
         )
-        self.standby_plant_lbl.pack(pady=(0, 18))
+        self.standby_plant_canvas.pack(pady=(0, 18))
 
         # Big, sleek progress bar in center
         self.standby_progress = ctk.CTkProgressBar(
@@ -753,11 +755,13 @@ class BookshelfApp(ctk.CTk):
             self.standby_stats.configure(text=f"{self.current_page} / {self.total_pages} sivua  •  {pct:.0f}%")
             self.standby_progress.set(min(1.0, self.current_page / max(1, self.total_pages)))
 
-            # Update standby plant image
-            if self.is_plant_alive:
-                self.standby_plant_lbl.configure(image=self.ctk_plant_alive)
-            else:
-                self.standby_plant_lbl.configure(image=self.ctk_plant_wilted)
+            draw_plant_on_canvas(
+                self.standby_plant_canvas,
+                alive=self.is_plant_alive,
+                dark_mode=True,
+                w=self.plant_w,
+                h=self.plant_h
+            )
 
             self.standby_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
             self.standby_frame.lift()
@@ -840,13 +844,21 @@ class BookshelfApp(ctk.CTk):
         else:
             self.hero_rem_lbl.configure(text=f"{left} sivua jäljellä", text_color=TEXT_MUTED)
 
-        # Update Center Plant image (wilted vs alive)
-        if self.is_plant_alive:
-            self.plant_label.configure(image=self.ctk_plant_alive)
-            self.standby_plant_lbl.configure(image=self.ctk_plant_alive)
-        else:
-            self.plant_label.configure(image=self.ctk_plant_wilted)
-            self.standby_plant_lbl.configure(image=self.ctk_plant_wilted)
+        # Update Center Plant Canvas (wilted vs alive)
+        draw_plant_on_canvas(
+            self.plant_canvas,
+            alive=self.is_plant_alive,
+            dark_mode=False,
+            w=self.plant_w,
+            h=self.plant_h
+        )
+        draw_plant_on_canvas(
+            self.standby_plant_canvas,
+            alive=self.is_plant_alive,
+            dark_mode=True,
+            w=self.plant_w,
+            h=self.plant_h
+        )
 
         # Update Streak Badge (starts at 0, rises to 1 on update)
         if self.streak_count == 1:
