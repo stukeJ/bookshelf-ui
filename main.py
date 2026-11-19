@@ -32,12 +32,33 @@ STANDBY_TEXT_PAGES = "#e5e5e5"# Crisp stats text in the dark
 IDLE_TIMEOUT_SECONDS = 15     # 15s inactivity triggers black standby screen
 
 
-def draw_plant_on_canvas(canvas, alive=True, dark_mode=False, w=110, h=110):
+def get_plant_phase(streak):
+    """Maps reading streak to plant growth phase (1 = wilted, 2..5 = growing to blooming)."""
+    if streak > 10:
+        return 5
+    elif streak > 7:
+        return 4
+    elif streak > 4:
+        return 3
+    elif streak >= 1:
+        return 2
+    else:
+        return 1
+
+
+def draw_plant_on_canvas(canvas, phase=1, dark_mode=False, w=110, h=110):
     """
-    Draws an aesthetic minimalist potted plant directly onto a native tkinter.Canvas.
+    Draws an aesthetic minimalist potted plant in 5 cohesive growth phases (1..5)
+    directly onto a native tkinter.Canvas.
+    Phase 1: Wilted (streak == 0)
+    Phase 2: Sprouting (streak 1..4)
+    Phase 3: Growing (streak 5..7)
+    Phase 4: Thriving full foliage (streak 8..10)
+    Phase 5: Full bloom with Scandinavian blossoms (streak > 10)
     Requires zero PIL / ImageTk dependencies and runs natively on Python 3.7.3.
     """
     canvas.delete("all")
+    phase = max(1, min(5, int(phase)))
 
     s = min(w, h) / 130.0
     cx = w / 2.0
@@ -51,33 +72,55 @@ def draw_plant_on_canvas(canvas, alive=True, dark_mode=False, w=110, h=110):
         pot_color = "#d5cdc2"
         pot_outline = "#b5aa9b"
         soil_color = "#6e6255"
-        if alive:
-            stem_color = "#386641"
-            leaf_fill = "#52b788"
-            leaf_stroke = "#2d6a4f"
-            sparkle_color = "#b3823c"
-        else:
+        sparkle_color = "#b3823c"
+        petal_fill = "#fffaf0"
+        petal_stroke = "#d4c3a3"
+        bloom_center = "#c88a2e"
+        if phase == 1:
             stem_color = "#7d7465"
             leaf_fill = "#9c9284"
             leaf_stroke = "#6b6355"
+        elif phase == 2:
+            stem_color = "#4a7c59"
+            leaf_fill = "#74c69d"
+            leaf_stroke = "#40916c"
+        elif phase == 3:
+            stem_color = "#3f734d"
+            leaf_fill = "#60bf90"
+            leaf_stroke = "#347a5b"
+        else:  # Phase 4 & 5
+            stem_color = "#386641"
+            leaf_fill = "#52b788"
+            leaf_stroke = "#2d6a4f"
     else:  # Standby / sleep mode
         bg_col = STANDBY_BG
         pot_color = "#24221f"
         pot_outline = "#423d37"
         soil_color = "#181614"
-        if alive:
-            stem_color = "#40916c"
-            leaf_fill = "#52b788"
-            leaf_stroke = "#74c69d"
-            sparkle_color = "#e0a96d"
-        else:
+        sparkle_color = "#e0a96d"
+        petal_fill = "#f5ebd6"
+        petal_stroke = "#b8a686"
+        bloom_center = "#e0a96d"
+        if phase == 1:
             stem_color = "#5c564c"
             leaf_fill = "#736b5f"
             leaf_stroke = "#8c8273"
+        elif phase == 2:
+            stem_color = "#4d8b6b"
+            leaf_fill = "#6bc49c"
+            leaf_stroke = "#86d4b0"
+        elif phase == 3:
+            stem_color = "#468e6b"
+            leaf_fill = "#5cbe91"
+            leaf_stroke = "#7bcfab"
+        else:  # Phase 4 & 5
+            stem_color = "#40916c"
+            leaf_fill = "#52b788"
+            leaf_stroke = "#74c69d"
 
     canvas.configure(bg=bg_col)
 
-    # 1. Ceramic Pot Body (Tapered)
+    # 1. Ceramic Pot Body (Tapered — identical across all 5 phases)
     p_tl = (cx - pot_top_w / 2.0, pot_top_y)
     p_tr = (cx + pot_top_w / 2.0, pot_top_y)
     p_br = (cx + pot_bot_w / 2.0, ground_y)
@@ -102,51 +145,60 @@ def draw_plant_on_canvas(canvas, alive=True, dark_mode=False, w=110, h=110):
     # Soil line
     canvas.create_line(p_tl[0] + 3 * s, pot_top_y, p_tr[0] - 3 * s, pot_top_y, fill=soil_color, width=2)
 
-    # 2. Plant Stem and Leaves
-    if alive:
-        # --- Upright, Thriving Plant ---
-        stem_pts = []
-        for t in range(25):
-            prog = t / 24.0
-            sx = cx + math.sin(prog * math.pi) * (7.0 * s)
-            sy = pot_top_y - prog * (h * 0.44)
-            stem_pts.extend([sx, sy])
-        canvas.create_line(*stem_pts, fill=stem_color, width=3.5, capstyle="round", smooth=True)
-
-        def draw_alive_leaf(lx, ly, angle_deg, l_len, l_w):
-            rad = math.radians(angle_deg)
+    # Helper to draw the species' signature smooth teardrop leaf
+    def draw_leaf(lx, ly, angle_deg, l_len, l_w, droop=False):
+        rad = math.radians(angle_deg)
+        if droop:
+            tx = lx + math.cos(rad) * l_len
+            ty = ly + math.sin(rad) * l_len
+            px = -math.sin(rad) * l_w
+            py = math.cos(rad) * l_w
+        else:
             tx = lx + math.cos(rad) * l_len
             ty = ly - math.sin(rad) * l_len
             px = -math.sin(rad) * l_w
             py = -math.cos(rad) * l_w
-            mid_x = (lx + tx) / 2.0
-            mid_y = (ly + ty) / 2.0
-            canvas.create_polygon(
-                lx, ly,
-                mid_x + px, mid_y + py,
-                tx, ty,
-                mid_x - px, mid_y - py,
-                fill=leaf_fill,
-                outline=leaf_stroke,
-                width=1.5,
-                smooth=True
+        mid_x = (lx + tx) / 2.0
+        mid_y = (ly + ty) / 2.0
+        canvas.create_polygon(
+            lx, ly,
+            mid_x + px, mid_y + py,
+            tx, ty,
+            mid_x - px, mid_y - py,
+            fill=leaf_fill,
+            outline=leaf_stroke,
+            width=1.5,
+            smooth=True
+        )
+
+    def draw_sparkle(sp_x, sp_y, r):
+        canvas.create_line(sp_x - r, sp_y, sp_x + r, sp_y, fill=sparkle_color, width=2)
+        canvas.create_line(sp_x, sp_y - r, sp_x, sp_y + r, fill=sparkle_color, width=2)
+
+    def draw_blossom(bx, by, petal_r):
+        dist = petal_r * 0.95
+        for k in range(5):
+            ang = math.radians(k * 72 - 90)
+            px = bx + math.cos(ang) * dist
+            py = by + math.sin(ang) * dist
+            canvas.create_oval(
+                px - petal_r, py - petal_r,
+                px + petal_r, py + petal_r,
+                fill=petal_fill,
+                outline=petal_stroke,
+                width=1
             )
+        cr = petal_r * 0.72
+        canvas.create_oval(
+            bx - cr, by - cr,
+            bx + cr, by + cr,
+            fill=bloom_center,
+            outline=""
+        )
 
-        draw_alive_leaf(cx - 3 * s, pot_top_y - 16 * s, 145, 30 * s, 12 * s)
-        draw_alive_leaf(cx + 7 * s, pot_top_y - 24 * s, 35, 32 * s, 13 * s)
-        draw_alive_leaf(cx - 2 * s, pot_top_y - 36 * s, 150, 26 * s, 11 * s)
-        draw_alive_leaf(cx + 6 * s, pot_top_y - 46 * s, 30, 28 * s, 11 * s)
-        draw_alive_leaf(cx + 2 * s, pot_top_y - 56 * s, 80, 22 * s, 9 * s)
-        draw_alive_leaf(cx - 2 * s, pot_top_y - 56 * s, 100, 22 * s, 9 * s)
-
-        # Subtle gold sparkle near top
-        sp_x = cx + 24 * s
-        sp_y = pot_top_y - 54 * s
-        canvas.create_line(sp_x - 4 * s, sp_y, sp_x + 4 * s, sp_y, fill=sparkle_color, width=2)
-        canvas.create_line(sp_x, sp_y - 4 * s, sp_x, sp_y + 4 * s, fill=sparkle_color, width=2)
-
-    else:
-        # --- Wilted / Drooping Plant ---
+    # 2. Plant Stem, Leaves & Blooms by Growth Phase
+    if phase == 1:
+        # --- Phase 1: Wilted / Drooping Plant ---
         stem_pts = []
         for t in range(25):
             prog = t / 24.0
@@ -155,34 +207,104 @@ def draw_plant_on_canvas(canvas, alive=True, dark_mode=False, w=110, h=110):
             stem_pts.extend([sx, sy])
         canvas.create_line(*stem_pts, fill=stem_color, width=3.5, capstyle="round", smooth=True)
 
-        def draw_droop_leaf(lx, ly, angle_deg, l_len, l_w):
-            rad = math.radians(angle_deg)
-            tx = lx + math.cos(rad) * l_len
-            ty = ly + math.sin(rad) * l_len
-            px = -math.sin(rad) * l_w
-            py = math.cos(rad) * l_w
-            mid_x = (lx + tx) / 2.0
-            mid_y = (ly + ty) / 2.0
-            canvas.create_polygon(
-                lx, ly,
-                mid_x + px, mid_y + py,
-                tx, ty,
-                mid_x - px, mid_y - py,
-                fill=leaf_fill,
-                outline=leaf_stroke,
-                width=1.5,
-                smooth=True
-            )
-
-        draw_droop_leaf(cx + 10 * s, pot_top_y - 6 * s, 75, 24 * s, 9 * s)
-        draw_droop_leaf(cx + 20 * s, pot_top_y + 2 * s, 85, 26 * s, 10 * s)
+        draw_leaf(cx + 10 * s, pot_top_y - 6 * s, 75, 24 * s, 9 * s, droop=True)
+        draw_leaf(cx + 20 * s, pot_top_y + 2 * s, 85, 26 * s, 10 * s, droop=True)
         tip_x, tip_y = stem_pts[-2], stem_pts[-1]
-        draw_droop_leaf(tip_x, tip_y, 80, 22 * s, 9 * s)
+        draw_leaf(tip_x, tip_y, 80, 22 * s, 9 * s, droop=True)
 
         # Fallen dry leaf on the ground
-        fallen_x = cx - 26 * s
-        fallen_y = ground_y - 2 * s
-        draw_droop_leaf(fallen_x, fallen_y, 10, 18 * s, 6 * s)
+        draw_leaf(cx - 26 * s, ground_y - 2 * s, 10, 18 * s, 6 * s, droop=True)
+        return
+
+    # Shared upright S-curve stem trajectory for Phases 2..5 (clearly the same plant growing taller)
+    height_ratios = {2: 0.21, 3: 0.33, 4: 0.44, 5: 0.44}
+    sway_mults = {2: 0.50, 3: 0.78, 4: 1.00, 5: 1.00}
+    stem_widths = {2: 2.8, 3: 3.2, 4: 3.5, 5: 3.8}
+
+    h_ratio = height_ratios[phase]
+    sway = sway_mults[phase]
+
+    def stem_xy(prog):
+        sx = cx + math.sin(prog * math.pi) * (7.0 * s * sway)
+        sy = pot_top_y - prog * (h * h_ratio)
+        return sx, sy
+
+    stem_pts = []
+    for t in range(25):
+        sx, sy = stem_xy(t / 24.0)
+        stem_pts.extend([sx, sy])
+    canvas.create_line(*stem_pts, fill=stem_color, width=stem_widths[phase], capstyle="round", smooth=True)
+
+    tip_x, tip_y = stem_xy(1.0)
+
+    if phase == 2:
+        # --- Phase 2: Reviving Sprout (short upright stem + first 2 young leaves + bud) ---
+        lx1, ly1 = stem_xy(0.45)
+        lx2, ly2 = stem_xy(0.68)
+        draw_leaf(lx1 - 1 * s, ly1, 145, 21 * s, 8.5 * s)
+        draw_leaf(lx2 + 1 * s, ly2, 35, 22 * s, 9 * s)
+        draw_leaf(tip_x, tip_y, 90, 12 * s, 5 * s)
+
+    elif phase == 3:
+        # --- Phase 3: Mid-Growth (taller stem + 4 leaves + unfurling crown bud) ---
+        lx1, ly1 = stem_xy(0.35)
+        lx2, ly2 = stem_xy(0.52)
+        lx3, ly3 = stem_xy(0.75)
+        lx4, ly4 = stem_xy(0.90)
+        draw_leaf(lx1 - 2 * s, ly1, 145, 26 * s, 10.5 * s)
+        draw_leaf(lx2 + 2 * s, ly2, 35, 28 * s, 11 * s)
+        draw_leaf(lx3 - 2 * s, ly3, 150, 22 * s, 9 * s)
+        draw_leaf(lx4 + 2 * s, ly4, 30, 23 * s, 9.5 * s)
+        draw_leaf(tip_x, tip_y, 88, 15 * s, 6 * s)
+
+    elif phase == 4:
+        # --- Phase 4: Full-Grown Thriving Plant (full height + 6 lush leaves + sparkle) ---
+        draw_leaf(cx - 3 * s, pot_top_y - 16 * s, 145, 30 * s, 12 * s)
+        draw_leaf(cx + 7 * s, pot_top_y - 24 * s, 35, 32 * s, 13 * s)
+        draw_leaf(cx - 2 * s, pot_top_y - 36 * s, 150, 26 * s, 11 * s)
+        draw_leaf(cx + 6 * s, pot_top_y - 46 * s, 30, 28 * s, 11 * s)
+        draw_leaf(cx + 2 * s, pot_top_y - 56 * s, 80, 22 * s, 9 * s)
+        draw_leaf(cx - 2 * s, pot_top_y - 56 * s, 100, 22 * s, 9 * s)
+
+        draw_sparkle(cx + 24 * s, pot_top_y - 54 * s, 4 * s)
+
+    else:
+        # --- Phase 5: Mature Blooming Plant (full 6 leaves + base shoots + 3 blossoms + sparkles) ---
+        # Small lush base shoots
+        draw_leaf(cx - 4 * s, pot_top_y - 6 * s, 155, 19 * s, 7.5 * s)
+        draw_leaf(cx + 5 * s, pot_top_y - 8 * s, 25, 20 * s, 7.5 * s)
+
+        # Same 6 signature leaves as Phase 4
+        draw_leaf(cx - 3 * s, pot_top_y - 16 * s, 145, 31 * s, 12.5 * s)
+        draw_leaf(cx + 7 * s, pot_top_y - 24 * s, 35, 33 * s, 13.5 * s)
+        draw_leaf(cx - 2 * s, pot_top_y - 36 * s, 150, 27 * s, 11.5 * s)
+        draw_leaf(cx + 6 * s, pot_top_y - 46 * s, 30, 29 * s, 11.5 * s)
+        draw_leaf(cx + 2 * s, pot_top_y - 56 * s, 75, 22 * s, 9 * s)
+        draw_leaf(cx - 2 * s, pot_top_y - 56 * s, 105, 22 * s, 9 * s)
+
+        # Delicate Scandinavian blossoms crowning the same plant
+        draw_blossom(cx, pot_top_y - 60 * s, 4.6 * s)
+        draw_blossom(cx - 17 * s, pot_top_y - 46 * s, 3.6 * s)
+        draw_blossom(cx + 20 * s, pot_top_y - 48 * s, 3.8 * s)
+
+        # Twin golden sparkles
+        draw_sparkle(cx + 27 * s, pot_top_y - 60 * s, 4.5 * s)
+        draw_sparkle(cx - 25 * s, pot_top_y - 58 * s, 3.5 * s)
+
+
+def format_duration(total_seconds):
+    """Formats total seconds cleanly as H:MM:SS."""
+    sec = max(0, int(total_seconds))
+    h = sec // 3600
+    m = (sec % 3600) // 60
+    s = sec % 60
+    return f"{h}:{m:02d}:{s:02d}"
+
+
+def split_duration(total_seconds):
+    """Splits total seconds into (hours, minutes, seconds)."""
+    sec = max(0, int(total_seconds))
+    return sec // 3600, (sec % 3600) // 60, sec % 60
 
 
 class BookshelfApp(ctk.CTk):
@@ -195,23 +317,33 @@ class BookshelfApp(ctk.CTk):
         self.attributes("-fullscreen", True)
         self.configure(fg_color=BG_COLOR)
 
-        # Single active book tracked directly
-        self.current_page = 0
-        self.total_pages = 350
+        # Multiple books supported simultaneously ("book" with pages or "ebook" with duration)
+        self.books = [
+            {"title": "Tuntematon sotilas", "author": "Väinö Linna", "type": "book", "current_page": 0, "total_pages": 350},
+            {"title": "Sapiens", "author": "Yuval Noah Harari", "type": "book", "current_page": 142, "total_pages": 464},
+            {"title": "Seitsemän veljestä", "author": "Aleksis Kivi", "type": "book", "current_page": 85, "total_pages": 320},
+        ]
+        self.active_book_index = 0
 
         # Lukuputki alkaa aina nollasta ilman kellointegraatiota
-        self.streak_count = 0
+        self.streak_count = 3
 
-        # Kasvin tila: alussa kuihtunut, muuttuu eläväksi kun sivumäärää päivitetään
+        # Kasvin tila: alussa kuihtunut, muuttuu eläväksi kun sivumäärää/kestoa päivitetään
         self.is_plant_alive = False
         self.plant_w = 110
         self.plant_h = 110
 
-        # UI State: "summary" or "numpad"
+        # UI State: "summary", "numpad", or "book_list"
         self.current_view_mode = "summary"
         self.numpad_mode = "current_page"  # "current_page" or "total_pages"
+        self.creating_ebook = False
         self.numpad_input_str = ""
         self.numpad_fresh = False
+
+        # 3-field duration input state: [hours, minutes, seconds]
+        self.duration_inputs = ["", "", ""]
+        self.active_duration_field = 0
+        self.duration_field_fresh = False
 
         # Idle / Standby Tracking
         self.is_standby = False
@@ -230,8 +362,45 @@ class BookshelfApp(ctk.CTk):
         # Start 15s timer
         self._schedule_idle_check()
 
+    @property
+    def plant_phase(self):
+        return get_plant_phase(self.streak_count)
+
+    @property
+    def active_book(self):
+        if not self.books:
+            return None
+        if self.active_book_index >= len(self.books):
+            self.active_book_index = len(self.books) - 1
+        return self.books[self.active_book_index]
+
+    @property
+    def is_active_ebook(self):
+        book = self.active_book
+        return book is not None and book.get("type") == "ebook"
+
+    @property
+    def current_page(self):
+        book = self.active_book
+        return book.get("current_page", 0) if book is not None else 0
+
+    @current_page.setter
+    def current_page(self, value):
+        if self.active_book is not None:
+            self.active_book["current_page"] = value
+
+    @property
+    def total_pages(self):
+        book = self.active_book
+        return book.get("total_pages", 0) if book is not None else 0
+
+    @total_pages.setter
+    def total_pages(self, value):
+        if self.active_book is not None:
+            self.active_book["total_pages"] = value
+
     def _build_ui(self):
-        # 1. TOP HEADER (Left: "Uusi kirja", Right: Close & Streak badge)
+        # 1. TOP HEADER (Left: "Uusi kirja" & "Vaihda kirjaa", Right: Close & Streak badge)
         self.header_frame = ctk.CTkFrame(
             self,
             fg_color=CARD_BG,
@@ -249,6 +418,7 @@ class BookshelfApp(ctk.CTk):
         self.new_book_btn = ctk.CTkButton(
             self.header_frame,
             text="Uusi kirja",
+            width=96,
             height=36,
             corner_radius=8,
             fg_color=CARD_SURFACE,
@@ -259,7 +429,24 @@ class BookshelfApp(ctk.CTk):
             font=ctk.CTkFont(size=12, weight="bold"),
             command=self._show_numpad_for_new_book
         )
-        self.new_book_btn.pack(side="left", padx=(28, 0), pady=13)
+        self.new_book_btn.pack(side="left", padx=(24, 0), pady=13)
+
+        # --- "Vaihda kirjaa" BUTTON (NEXT TO "Uusi kirja") ---
+        self.switch_book_btn = ctk.CTkButton(
+            self.header_frame,
+            text="Vaihda kirjaa",
+            width=114,
+            height=36,
+            corner_radius=8,
+            fg_color=CARD_SURFACE,
+            hover_color=CARD_HOVER,
+            text_color=TEXT_PRIMARY,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._show_book_list_view
+        )
+        self.switch_book_btn.pack(side="left", padx=(8, 0), pady=13)
 
         # --- CLOSE BUTTON (TOP-RIGHT) ---
         self.close_btn = ctk.CTkButton(
@@ -377,12 +564,28 @@ class BookshelfApp(ctk.CTk):
         self.numpad_frame = ctk.CTkFrame(self.main_card, fg_color="transparent")
         self._build_numpad_view()
 
+        # --- VIEW 3: Simple Book Switcher Frame ---
+        self.book_list_frame = ctk.CTkFrame(self.main_card, fg_color="transparent")
+        self._build_book_list_view()
+
         # Start with summary view visible
         self.summary_frame.pack(fill="both", expand=True, padx=24, pady=16)
 
     def _build_summary_view(self):
-        """Standard reading overview with native Canvas plant inside the gray stat box."""
-        # Stat Card (Clean neutral tone box containing current page, plant in middle, and %)
+        """Standard reading overview with book title at top-left and native Canvas plant inside the gray stat box."""
+        summary_head = ctk.CTkFrame(self.summary_frame, fg_color="transparent")
+        summary_head.pack(fill="x", pady=(0, 8))
+
+        self.summary_tag_lbl = ctk.CTkLabel(
+            summary_head,
+            text="NYKYINEN KIRJA",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=ACCENT_BRASS,
+            anchor="w"
+        )
+        self.summary_tag_lbl.pack(side="left", anchor="w")
+
+        # Stat Card (Clean neutral tone box containing book title, current page/duration, plant in middle, and %)
         self.stat_box = ctk.CTkFrame(
             self.summary_frame,
             fg_color=CARD_SURFACE,
@@ -392,19 +595,38 @@ class BookshelfApp(ctk.CTk):
         )
         self.stat_box.pack(fill="both", expand=True, pady=(0, 12))
 
+        # Active book title & optional author at the top-left of the gray stat box
+        self.hero_book_title = ctk.CTkLabel(
+            self.stat_box,
+            text="",
+            font=ctk.CTkFont(size=26, weight="bold"),
+            text_color=TEXT_PRIMARY,
+            anchor="w"
+        )
+        self.hero_book_title.pack(side="top", fill="x", padx=32, pady=(20, 0))
+
+        self.hero_book_author = ctk.CTkLabel(
+            self.stat_box,
+            text="",
+            font=ctk.CTkFont(size=15),
+            text_color=TEXT_SECONDARY,
+            anchor="w"
+        )
+        self.hero_book_author.pack(side="top", fill="x", padx=32, pady=(2, 4))
+
         stat_inner = ctk.CTkFrame(self.stat_box, fg_color="transparent")
-        stat_inner.pack(fill="both", expand=True, padx=24, pady=10)
+        stat_inner.pack(fill="both", expand=True, padx=24, pady=(2, 10))
 
         left_stat = ctk.CTkFrame(stat_inner, fg_color="transparent")
         left_stat.pack(side="left")
 
-        page_caption = ctk.CTkLabel(
+        self.page_caption = ctk.CTkLabel(
             left_stat,
             text="Nykyinen sivu",
             font=ctk.CTkFont(size=12),
             text_color=TEXT_MUTED
         )
-        page_caption.pack(anchor="w")
+        self.page_caption.pack(anchor="w")
 
         self.hero_page_big = ctk.CTkLabel(
             left_stat,
@@ -467,67 +689,216 @@ class BookshelfApp(ctk.CTk):
         self.add_pages_btn.pack(fill="x", pady=(0, 2))
 
     def _build_numpad_view(self):
-        """Pure on-screen touch numpad directly in the same window (no separate popup windows)."""
+        """In-window form & compact touch numpad (no separate popup windows)."""
         numpad_head = ctk.CTkFrame(self.numpad_frame, fg_color="transparent")
-        numpad_head.pack(fill="x", pady=(0, 10))
+        numpad_head.pack(fill="x", pady=(0, 8))
 
         self.numpad_tag_lbl = ctk.CTkLabel(
             numpad_head,
-            text="MERKITSE SIVU • KOSKETUSNÄPPÄIMISTÖ",
+            text="MERKITSE SIVU",
             font=ctk.CTkFont(size=11, weight="bold"),
             text_color=ACCENT_BRASS,
             anchor="w"
         )
-        self.numpad_tag_lbl.pack(anchor="w")
+        self.numpad_tag_lbl.pack(side="left", anchor="w")
 
-        key_container = ctk.CTkFrame(self.numpad_frame, fg_color="transparent")
-        key_container.pack(fill="both", expand=True)
+        # Toggle button shown in "Uusi kirja" view to switch to "Uusi e-kirja" (duration input)
+        self.ebook_toggle_btn = ctk.CTkButton(
+            numpad_head,
+            text="Uusi e-kirja",
+            width=116,
+            height=30,
+            corner_radius=8,
+            fg_color=CARD_SURFACE,
+            hover_color=CARD_HOVER,
+            text_color=TEXT_PRIMARY,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._toggle_new_book_type
+        )
 
-        key_container.grid_columnconfigure(0, weight=4)
-        key_container.grid_columnconfigure(1, weight=5)
-        key_container.grid_rowconfigure(0, weight=1)
+        # Prominent book title & optional author inputs (shown only when creating a new book)
+        self.new_book_name_box = ctk.CTkFrame(self.numpad_frame, fg_color="transparent")
+        self.new_book_name_box.grid_columnconfigure(0, weight=3)
+        self.new_book_name_box.grid_columnconfigure(1, weight=2)
 
-        # --- LEFT COLUMN: Digital Page Display + Action Buttons ---
-        left_col = ctk.CTkFrame(key_container, fg_color="transparent")
+        name_caption = ctk.CTkLabel(
+            self.new_book_name_box,
+            text="Kirjan nimi",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=TEXT_PRIMARY,
+            anchor="w"
+        )
+        name_caption.grid(row=0, column=0, sticky="ew", padx=(0, 10), pady=(0, 4))
+
+        author_caption = ctk.CTkLabel(
+            self.new_book_name_box,
+            text="Kirjailija (vapaaehtoinen)",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=TEXT_SECONDARY,
+            anchor="w"
+        )
+        author_caption.grid(row=0, column=1, sticky="ew", pady=(0, 4))
+
+        self.new_book_name_entry = ctk.CTkEntry(
+            self.new_book_name_box,
+            height=42,
+            corner_radius=10,
+            fg_color=CARD_SURFACE,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            text_color=TEXT_PRIMARY,
+            placeholder_text="Kirjoita kirjan nimi...",
+            placeholder_text_color=TEXT_MUTED,
+            font=ctk.CTkFont(size=15)
+        )
+        self.new_book_name_entry.grid(row=1, column=0, sticky="ew", padx=(0, 10))
+
+        self.new_book_author_entry = ctk.CTkEntry(
+            self.new_book_name_box,
+            height=42,
+            corner_radius=10,
+            fg_color=CARD_SURFACE,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            text_color=TEXT_PRIMARY,
+            placeholder_text="Kirjailijan nimi...",
+            placeholder_text_color=TEXT_MUTED,
+            font=ctk.CTkFont(size=14)
+        )
+        self.new_book_author_entry.grid(row=1, column=1, sticky="ew")
+
+        # Dynamic focus border styling for both text entries
+        for entry in (self.new_book_name_entry, self.new_book_author_entry):
+            entry.bind("<FocusIn>", lambda e, ent=entry: ent.configure(border_width=2, border_color=ACCENT_BRASS))
+            entry.bind("<FocusOut>", lambda e, ent=entry: ent.configure(border_width=1, border_color=BORDER_COLOR))
+
+        self.key_container = ctk.CTkFrame(self.numpad_frame, fg_color="transparent")
+        self.key_container.pack(fill="both", expand=True)
+
+        self.key_container.grid_columnconfigure(0, weight=1)
+        self.key_container.grid_columnconfigure(1, weight=0)
+        self.key_container.grid_rowconfigure(0, weight=1)
+
+        # --- LEFT COLUMN: Digital Page/Duration Display + Action Buttons ---
+        left_col = ctk.CTkFrame(self.key_container, fg_color="transparent")
         left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 16))
 
-        disp_card = ctk.CTkFrame(
+        # A) Single-value page display card (for regular books)
+        self.disp_card = ctk.CTkFrame(
             left_col,
             fg_color=CARD_SURFACE,
             corner_radius=12,
             border_width=1,
             border_color=BORDER_COLOR
         )
-        disp_card.pack(fill="x", pady=(0, 14))
+        self.disp_card.pack(fill="x", pady=(0, 10))
 
         self.numpad_sub_lbl = ctk.CTkLabel(
-            disp_card,
+            self.disp_card,
             text="Syötetty sivu",
             font=ctk.CTkFont(size=11),
             text_color=TEXT_MUTED
         )
-        self.numpad_sub_lbl.pack(pady=(12, 0))
+        self.numpad_sub_lbl.pack(pady=(8, 0))
 
         self.numpad_display_num = ctk.CTkLabel(
-            disp_card,
+            self.disp_card,
             text="0",
-            font=ctk.CTkFont(size=44, weight="bold"),
+            font=ctk.CTkFont(size=32, weight="bold"),
             text_color=TEXT_PRIMARY
         )
-        self.numpad_display_num.pack(pady=(2, 0))
+        self.numpad_display_num.pack(pady=(0, 0))
 
         self.numpad_display_meta = ctk.CTkLabel(
-            disp_card,
+            self.disp_card,
             text="/ 0 sivua (0%)",
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color=ACCENT_BRASS
         )
-        self.numpad_display_meta.pack(pady=(2, 14))
+        self.numpad_display_meta.pack(pady=(0, 8))
+
+        # B) 3-field duration card (Tunnit / Minuutit / Sekunnit) for e-books / audiobooks
+        self.duration_card = ctk.CTkFrame(
+            left_col,
+            fg_color=CARD_SURFACE,
+            corner_radius=12,
+            border_width=1,
+            border_color=BORDER_COLOR
+        )
+
+        self.duration_sub_lbl = ctk.CTkLabel(
+            self.duration_card,
+            text="Äänikirjan kesto",
+            font=ctk.CTkFont(size=11),
+            text_color=TEXT_MUTED
+        )
+        self.duration_sub_lbl.pack(pady=(8, 4))
+
+        fields_row = ctk.CTkFrame(self.duration_card, fg_color="transparent")
+        fields_row.pack(fill="x", padx=12, pady=(0, 4))
+        fields_row.grid_columnconfigure(0, weight=1)
+        fields_row.grid_columnconfigure(1, weight=0)
+        fields_row.grid_columnconfigure(2, weight=1)
+        fields_row.grid_columnconfigure(3, weight=0)
+        fields_row.grid_columnconfigure(4, weight=1)
+
+        field_labels = ("Tunnit", "Minuutit", "Sekunnit")
+        self.duration_field_btns = []
+        for idx, caption in enumerate(field_labels):
+            col = idx * 2
+            lbl = ctk.CTkLabel(
+                fields_row,
+                text=caption,
+                font=ctk.CTkFont(size=11),
+                text_color=TEXT_SECONDARY
+            )
+            lbl.grid(row=0, column=col, pady=(0, 2))
+
+            btn = ctk.CTkButton(
+                fields_row,
+                text="00",
+                height=42,
+                width=56,
+                corner_radius=8,
+                fg_color=CARD_BG,
+                hover_color=CARD_HOVER,
+                text_color=TEXT_PRIMARY,
+                border_width=1,
+                border_color=BORDER_COLOR,
+                font=ctk.CTkFont(size=20, weight="bold"),
+                command=lambda i=idx: self._select_duration_field(i)
+            )
+            btn.grid(row=1, column=col, sticky="ew", padx=2)
+            self.duration_field_btns.append(btn)
+
+            if idx < 2:
+                colon = ctk.CTkLabel(
+                    fields_row,
+                    text=":",
+                    font=ctk.CTkFont(size=20, weight="bold"),
+                    text_color=TEXT_MUTED
+                )
+                colon.grid(row=1, column=col + 1, padx=2)
+
+        self.duration_meta_lbl = ctk.CTkLabel(
+            self.duration_card,
+            text="tunnit : minuutit : sekunnit",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=ACCENT_BRASS
+        )
+        self.duration_meta_lbl.pack(pady=(2, 8))
+
+        self.action_row = ctk.CTkFrame(left_col, fg_color="transparent")
+        self.action_row.pack(fill="x")
+        self.action_row.grid_columnconfigure(0, weight=3)
+        self.action_row.grid_columnconfigure(1, weight=2)
 
         self.numpad_save_btn = ctk.CTkButton(
-            left_col,
+            self.action_row,
             text="Tallenna sivu ✓",
-            height=46,
+            height=42,
             corner_radius=10,
             fg_color=ACCENT_DARK,
             hover_color=ACCENT_DARK_HOVER,
@@ -535,10 +906,10 @@ class BookshelfApp(ctk.CTk):
             font=ctk.CTkFont(size=13, weight="bold"),
             command=self._confirm_numpad
         )
-        self.numpad_save_btn.pack(fill="x", pady=(0, 8))
+        self.numpad_save_btn.grid(row=0, column=0, sticky="ew", padx=(0, 6))
 
         cancel_btn = ctk.CTkButton(
-            left_col,
+            self.action_row,
             text="Peruuta",
             height=42,
             corner_radius=10,
@@ -550,11 +921,27 @@ class BookshelfApp(ctk.CTk):
             font=ctk.CTkFont(size=12),
             command=self._show_summary_view
         )
-        cancel_btn.pack(fill="x")
+        cancel_btn.grid(row=0, column=1, sticky="ew")
 
-        # --- RIGHT COLUMN: Pure Touch Keypad Grid ---
-        keys_col = ctk.CTkFrame(key_container, fg_color="transparent")
-        keys_col.grid(row=0, column=1, sticky="nsew")
+        # Compact "Luettu loppuun" button (fills duration fields to 100% when updating e-book progress)
+        self.mark_finished_btn = ctk.CTkButton(
+            left_col,
+            text="Luettu loppuun",
+            width=126,
+            height=30,
+            corner_radius=8,
+            fg_color="#ecfdf5",
+            hover_color="#d1fae5",
+            text_color="#15803d",
+            border_width=1,
+            border_color="#a7f3d0",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._mark_ebook_finished
+        )
+
+        # --- RIGHT COLUMN: Compact Touch Keypad Grid ---
+        keys_col = ctk.CTkFrame(self.key_container, fg_color="transparent")
+        keys_col.grid(row=0, column=1, sticky="ne")
 
         keys = [
             ["1", "2", "3"],
@@ -564,9 +951,7 @@ class BookshelfApp(ctk.CTk):
         ]
 
         for r, row in enumerate(keys):
-            keys_col.grid_rowconfigure(r, weight=1)
             for c, key in enumerate(row):
-                keys_col.grid_columnconfigure(c, weight=1)
                 if key == "C":
                     cmd = self._numpad_clear
                     fg = "#fdf2f2"
@@ -586,52 +971,483 @@ class BookshelfApp(ctk.CTk):
                 btn = ctk.CTkButton(
                     keys_col,
                     text=key,
-                    corner_radius=10,
+                    width=68,
+                    height=44,
+                    corner_radius=9,
                     fg_color=fg,
                     hover_color=hover,
                     text_color=txt_col,
                     border_width=1,
                     border_color=BORDER_COLOR,
-                    font=ctk.CTkFont(size=20, weight="bold"),
+                    font=ctk.CTkFont(size=18, weight="bold"),
                     command=cmd
                 )
-                btn.grid(row=r, column=c, padx=3, pady=3, sticky="nsew")
+                btn.grid(row=r, column=c, padx=3, pady=3)
 
-    def _show_numpad_for_current_page(self):
-        """Switches in-place to numpad for updating current reading page."""
-        self.numpad_mode = "current_page"
-        self.numpad_tag_lbl.configure(text="MERKITSE SIVU • KOSKETUSNÄPPÄIMISTÖ")
-        self.numpad_sub_lbl.configure(text="Nykyinen sivu")
-        self.numpad_save_btn.configure(text="Tallenna sivu ✓")
-        self.numpad_input_str = str(self.current_page) if self.current_page > 0 else ""
-        self.numpad_fresh = True
+    def _build_book_list_view(self):
+        """Simple in-window book switcher listing each book's name, progress, and 'Valitse kirja' button."""
+        list_head = ctk.CTkFrame(self.book_list_frame, fg_color="transparent")
+        list_head.pack(fill="x", pady=(0, 10))
+
+        list_tag_lbl = ctk.CTkLabel(
+            list_head,
+            text="VAIHDA KIRJAA • KIRJASTO",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=ACCENT_BRASS,
+            anchor="w"
+        )
+        list_tag_lbl.pack(side="left")
+
+        back_btn = ctk.CTkButton(
+            list_head,
+            text="Takaisin",
+            width=84,
+            height=30,
+            corner_radius=8,
+            fg_color=CARD_BG,
+            hover_color=CARD_HOVER,
+            text_color=TEXT_SECONDARY,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            font=ctk.CTkFont(size=12),
+            command=self._show_summary_view
+        )
+        back_btn.pack(side="right")
+
+        self.book_scroll_frame = ctk.CTkScrollableFrame(
+            self.book_list_frame,
+            fg_color="transparent",
+            scrollbar_button_color=BORDER_COLOR,
+            scrollbar_button_hover_color=TEXT_MUTED
+        )
+        self.book_scroll_frame.pack(fill="both", expand=True)
+
+        # In-window delete confirmation overlay (stays inside fullscreen window)
+        self.pending_delete_index = None
+        self.confirm_delete_overlay = ctk.CTkFrame(
+            self.book_list_frame,
+            fg_color=CARD_BG,
+            corner_radius=12
+        )
+
+        confirm_card = ctk.CTkFrame(
+            self.confirm_delete_overlay,
+            fg_color=CARD_SURFACE,
+            corner_radius=14,
+            border_width=1,
+            border_color=BORDER_COLOR
+        )
+        confirm_card.place(relx=0.5, rely=0.5, anchor="center")
+
+        confirm_inner = ctk.CTkFrame(confirm_card, fg_color="transparent")
+        confirm_inner.pack(padx=28, pady=22)
+
+        confirm_title = ctk.CTkLabel(
+            confirm_inner,
+            text="Poista kirja?",
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color=TEXT_PRIMARY
+        )
+        confirm_title.pack(pady=(0, 6))
+
+        self.confirm_delete_msg = ctk.CTkLabel(
+            confirm_inner,
+            text="",
+            font=ctk.CTkFont(size=13),
+            text_color=TEXT_SECONDARY,
+            wraplength=340,
+            justify="center"
+        )
+        self.confirm_delete_msg.pack(pady=(0, 18))
+
+        confirm_btns = ctk.CTkFrame(confirm_inner, fg_color="transparent")
+        confirm_btns.pack()
+
+        confirm_yes_btn = ctk.CTkButton(
+            confirm_btns,
+            text="Poista",
+            width=116,
+            height=38,
+            corner_radius=10,
+            fg_color="#dc2626",
+            hover_color="#b91c1c",
+            text_color="#ffffff",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=self._confirm_delete_book
+        )
+        confirm_yes_btn.pack(side="left", padx=(0, 10))
+
+        confirm_no_btn = ctk.CTkButton(
+            confirm_btns,
+            text="Peruuta",
+            width=116,
+            height=38,
+            corner_radius=10,
+            fg_color=CARD_BG,
+            hover_color=CARD_HOVER,
+            text_color=TEXT_PRIMARY,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            font=ctk.CTkFont(size=13),
+            command=self._cancel_delete_book
+        )
+        confirm_no_btn.pack(side="left")
+
+    def _populate_book_list(self):
+        """Rebuilds the rows of books with title, optional E-kirja badge, author, progress, 'Valitse kirja', and 'Poista'."""
+        for child in self.book_scroll_frame.winfo_children():
+            child.destroy()
+
+        if not self.books:
+            empty_lbl = ctk.CTkLabel(
+                self.book_scroll_frame,
+                text="Kirjasto on tyhjä. Lisää uusi kirja yläpalkista.",
+                font=ctk.CTkFont(size=13),
+                text_color=TEXT_MUTED
+            )
+            empty_lbl.pack(pady=24)
+            return
+
+        for idx, book in enumerate(self.books):
+            is_active = (idx == self.active_book_index)
+            is_ebook = (book.get("type") == "ebook")
+
+            if is_ebook:
+                cur_val = book.get("current_seconds", 0)
+                total_val = book.get("total_seconds", 0)
+                pct = (cur_val / total_val * 100) if total_val > 0 else 0
+                progress_str = f"{format_duration(cur_val)} / {format_duration(total_val)} ({pct:.0f}%)"
+            else:
+                cur_val = book.get("current_page", 0)
+                total_val = book.get("total_pages", 0)
+                pct = (cur_val / total_val * 100) if total_val > 0 else 0
+                progress_str = f"{cur_val} / {total_val} sivua ({pct:.0f}%)"
+
+            row = ctk.CTkFrame(
+                self.book_scroll_frame,
+                fg_color=CARD_SURFACE,
+                corner_radius=10,
+                height=52,
+                border_width=1,
+                border_color=ACCENT_BRASS if is_active else BORDER_COLOR
+            )
+            row.pack(fill="x", pady=4)
+            row.pack_propagate(False)
+
+            row_inner = ctk.CTkFrame(row, fg_color="transparent")
+            row_inner.pack(fill="both", expand=True, padx=14, pady=6)
+
+            # Pack buttons on the right first so they always remain visible on small screens
+            delete_btn = ctk.CTkButton(
+                row_inner,
+                text="Poista kirja",
+                width=92,
+                height=32,
+                corner_radius=8,
+                fg_color="#fdf2f2",
+                hover_color="#fee2e2",
+                text_color="#dc2626",
+                border_width=1,
+                border_color="#fecaca",
+                font=ctk.CTkFont(size=12, weight="bold"),
+                command=lambda i=idx: self._ask_delete_book(i)
+            )
+            delete_btn.pack(side="right", padx=(6, 0))
+
+            select_btn = ctk.CTkButton(
+                row_inner,
+                text="Valitse kirja",
+                width=104,
+                height=32,
+                corner_radius=8,
+                fg_color=ACCENT_DARK,
+                hover_color=ACCENT_DARK_HOVER,
+                text_color="#ffffff",
+                font=ctk.CTkFont(size=12, weight="bold"),
+                command=lambda i=idx: self._select_book(i)
+            )
+            select_btn.pack(side="right", padx=(10, 0))
+
+            title_lbl = ctk.CTkLabel(
+                row_inner,
+                text=book["title"],
+                font=ctk.CTkFont(size=14, weight="bold"),
+                text_color=TEXT_PRIMARY,
+                anchor="w"
+            )
+            title_lbl.pack(side="left")
+
+            if is_ebook:
+                ebook_badge = ctk.CTkLabel(
+                    row_inner,
+                    text="E-kirja",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    text_color=STREAK_TEXT,
+                    fg_color=STREAK_BG,
+                    corner_radius=6,
+                    padx=7,
+                    pady=2
+                )
+                ebook_badge.pack(side="left", padx=(8, 0))
+
+            author = book.get("author", "").strip()
+            if author:
+                author_lbl = ctk.CTkLabel(
+                    row_inner,
+                    text=f"— {author}",
+                    font=ctk.CTkFont(size=12),
+                    text_color=TEXT_MUTED,
+                    anchor="w"
+                )
+                author_lbl.pack(side="left", padx=(6, 0))
+
+            progress_lbl = ctk.CTkLabel(
+                row_inner,
+                text=progress_str,
+                font=ctk.CTkFont(size=12),
+                text_color=TEXT_SECONDARY,
+                anchor="w"
+            )
+            progress_lbl.pack(side="left", padx=(12, 0))
+
+    def _hide_all_views(self):
+        """Hides all main card sub-views before switching to another."""
+        self._cancel_delete_book()
+        self.summary_frame.pack_forget()
+        self.numpad_frame.pack_forget()
+        self.book_list_frame.pack_forget()
+
+    def _show_book_list_view(self):
+        """Opens the simple book selection menu inside the same window."""
+        self._cancel_delete_book()
+        self._populate_book_list()
+        self._hide_all_views()
+        self.book_list_frame.pack(fill="both", expand=True, padx=24, pady=16)
+        self.current_view_mode = "book_list"
+
+    def _select_book(self, idx):
+        """Selects a book from the list and returns to the active reading view."""
+        if 0 <= idx < len(self.books):
+            self.active_book_index = idx
+        self._refresh_all_views()
+        self._show_summary_view()
+
+    def _ask_delete_book(self, idx):
+        """Shows an in-window confirmation prompt before deleting a book."""
+        if not (0 <= idx < len(self.books)):
+            return
+        self.pending_delete_index = idx
+        title = self.books[idx]["title"]
+        self.confirm_delete_msg.configure(
+            text=f"Oletko varma, että haluat poistaa kirjan \"{title}\"?"
+        )
+        self.confirm_delete_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.confirm_delete_overlay.lift()
+
+    def _cancel_delete_book(self):
+        """Closes the delete confirmation overlay without deleting."""
+        self.pending_delete_index = None
+        self.confirm_delete_overlay.place_forget()
+
+    def _confirm_delete_book(self):
+        """Confirms and deletes the pending book from the library."""
+        idx = self.pending_delete_index
+        self._cancel_delete_book()
+        if idx is not None:
+            self._delete_book(idx)
+
+    def _delete_book(self, idx):
+        """Removes a book from the library and refreshes both the list and active view."""
+        if not (0 <= idx < len(self.books)):
+            return
+        self.books.pop(idx)
+        if not self.books:
+            self.active_book_index = 0
+        elif idx < self.active_book_index:
+            self.active_book_index -= 1
+        elif self.active_book_index >= len(self.books):
+            self.active_book_index = len(self.books) - 1
+        self._refresh_all_views()
+        self._populate_book_list()
+
+    def _mark_ebook_finished(self):
+        """Fills the 3 duration fields to the e-book's full duration so the user can choose to save."""
+        if self.active_book is None or not self.is_active_ebook:
+            return
+        h, m, s = split_duration(self.active_book.get("total_seconds", 0))
+        self.duration_inputs = [
+            str(h) if h > 0 else "",
+            str(m) if m > 0 else "",
+            str(s) if s > 0 else "",
+        ]
+        self.duration_field_fresh = True
         self._update_numpad_display()
 
-        self.summary_frame.pack_forget()
+    def _is_duration_input_mode(self):
+        """Returns True if the current numpad view edits H:M:S duration instead of page count."""
+        if self.numpad_mode == "total_pages":
+            return self.creating_ebook
+        return self.is_active_ebook
+
+    def _sync_input_cards(self):
+        """Shows either the page display card or the 3-field duration card above action_row."""
+        self.disp_card.pack_forget()
+        self.duration_card.pack_forget()
+        if self._is_duration_input_mode():
+            self.duration_card.pack(fill="x", pady=(0, 10), before=self.action_row)
+        else:
+            self.disp_card.pack(fill="x", pady=(0, 10), before=self.action_row)
+
+    def _select_duration_field(self, idx):
+        """Selects Tunnit (0), Minuutit (1), or Sekunnit (2) as the active numpad target."""
+        self.active_duration_field = idx
+        self.duration_field_fresh = True
+        self.focus_set()
+        self._update_numpad_display()
+
+    def _get_duration_seconds(self):
+        """Converts the 3 duration input strings [h, m, s] to total seconds."""
+        vals = []
+        for s in self.duration_inputs:
+            try:
+                vals.append(int(s) if s else 0)
+            except ValueError:
+                vals.append(0)
+        return vals[0] * 3600 + vals[1] * 60 + vals[2]
+
+    def _toggle_new_book_type(self):
+        """Toggles between creating a regular book (pages) and an e-book (H:M:S duration)."""
+        self.creating_ebook = not self.creating_ebook
+        if self.creating_ebook:
+            self.numpad_tag_lbl.configure(text="UUSI E-KIRJA")
+            self.ebook_toggle_btn.configure(
+                text="Tavallinen kirja",
+                fg_color=CARD_SURFACE,
+                border_color=BORDER_COLOR,
+                text_color=TEXT_PRIMARY
+            )
+            self.duration_sub_lbl.configure(text="Äänikirjan kesto")
+            self.numpad_save_btn.configure(text="Aloita e-kirja ✓")
+            self.duration_inputs = ["", "", ""]
+            self.active_duration_field = 0
+            self.duration_field_fresh = False
+        else:
+            self.numpad_tag_lbl.configure(text="UUSI KIRJA")
+            self.ebook_toggle_btn.configure(
+                text="Uusi e-kirja",
+                fg_color=CARD_SURFACE,
+                border_color=BORDER_COLOR,
+                text_color=TEXT_PRIMARY
+            )
+            self.numpad_sub_lbl.configure(text="Kirjan sivumäärä yhteensä")
+            self.numpad_save_btn.configure(text="Aloita kirja ✓")
+            self.numpad_input_str = ""
+            self.numpad_fresh = False
+
+        self._sync_input_cards()
+        self._update_numpad_display()
+
+    def _show_numpad_for_current_page(self):
+        """Switches in-place to numpad for updating current reading page or e-book duration."""
+        if self.active_book is None:
+            self._show_numpad_for_new_book()
+            return
+        self.numpad_mode = "current_page"
+        self.ebook_toggle_btn.pack_forget()
+        self.new_book_name_box.pack_forget()
+        self.mark_finished_btn.pack_forget()
+
+        if self.is_active_ebook:
+            self.numpad_tag_lbl.configure(text="MERKITSE KESTO • KOSKETUSNÄPPÄIMISTÖ")
+            self.duration_sub_lbl.configure(text="Nykyinen kohta")
+            self.numpad_save_btn.configure(text="Tallenna kesto ✓")
+            h, m, s = split_duration(self.active_book.get("current_seconds", 0))
+            self.duration_inputs = [
+                str(h) if h > 0 else "",
+                str(m) if m > 0 else "",
+                str(s) if s > 0 else "",
+            ]
+            self.active_duration_field = 0
+            self.duration_field_fresh = True
+            self.mark_finished_btn.pack(anchor="w", pady=(8, 0))
+        else:
+            self.numpad_tag_lbl.configure(text="MERKITSE SIVU • KOSKETUSNÄPPÄIMISTÖ")
+            self.numpad_sub_lbl.configure(text="Nykyinen sivu")
+            self.numpad_save_btn.configure(text="Tallenna sivu ✓")
+            self.numpad_input_str = str(self.current_page) if self.current_page > 0 else ""
+            self.numpad_fresh = True
+
+        self._sync_input_cards()
+        self._update_numpad_display()
+
+        self._hide_all_views()
         self.numpad_frame.pack(fill="both", expand=True, padx=26, pady=16)
         self.current_view_mode = "numpad"
 
     def _show_numpad_for_new_book(self):
-        """Switches in-place to numpad for setting new book's total pages."""
+        """Switches in-place to new book form with prominent name field, e-book toggle, and compact numpad."""
         self.numpad_mode = "total_pages"
-        self.numpad_tag_lbl.configure(text="UUSI KIRJA • KOKONAISSIVUMÄÄRÄ")
+        self.creating_ebook = False
+        self.mark_finished_btn.pack_forget()
+        self.numpad_tag_lbl.configure(text="UUSI KIRJA")
+        self.ebook_toggle_btn.configure(
+            text="Uusi e-kirja",
+            fg_color=CARD_SURFACE,
+            border_color=BORDER_COLOR,
+            text_color=TEXT_PRIMARY
+        )
+        self.ebook_toggle_btn.pack(side="right")
+
+        self.new_book_name_entry.delete(0, "end")
+        self.new_book_author_entry.delete(0, "end")
+        self.new_book_name_box.pack(fill="x", pady=(0, 12), before=self.key_container)
+
         self.numpad_sub_lbl.configure(text="Kirjan sivumäärä yhteensä")
         self.numpad_save_btn.configure(text="Aloita kirja ✓")
         self.numpad_input_str = ""
         self.numpad_fresh = False
+        self.duration_inputs = ["", "", ""]
+        self.active_duration_field = 0
+        self.duration_field_fresh = False
+
+        self._sync_input_cards()
         self._update_numpad_display()
 
-        self.summary_frame.pack_forget()
+        self._hide_all_views()
         self.numpad_frame.pack(fill="both", expand=True, padx=26, pady=16)
         self.current_view_mode = "numpad"
+        self.new_book_name_entry.focus_set()
 
     def _show_summary_view(self):
         """Transitions back to the reading summary card."""
-        self.numpad_frame.pack_forget()
+        self._hide_all_views()
         self.summary_frame.pack(fill="both", expand=True, padx=24, pady=16)
         self.current_view_mode = "summary"
 
     def _update_numpad_display(self):
+        if self._is_duration_input_mode():
+            for idx, btn in enumerate(self.duration_field_btns):
+                raw = self.duration_inputs[idx]
+                if raw:
+                    display_txt = raw.zfill(2) if idx > 0 else raw
+                else:
+                    display_txt = "00" if idx > 0 else "0"
+                is_sel = (idx == self.active_duration_field)
+                btn.configure(
+                    text=display_txt,
+                    border_width=2 if is_sel else 1,
+                    border_color=ACCENT_BRASS if is_sel else BORDER_COLOR
+                )
+
+            cur_sec = self._get_duration_seconds()
+            if self.numpad_mode == "current_page":
+                total_sec = self.active_book.get("total_seconds", 0)
+                pct = min(100.0, (cur_sec / total_sec) * 100) if total_sec > 0 else 0
+                self.duration_meta_lbl.configure(text=f"/ {format_duration(total_sec)}  ({pct:.0f}%)")
+            else:
+                self.duration_meta_lbl.configure(text=f"Kesto: {format_duration(cur_sec)}")
+            return
+
         val = self.numpad_input_str if self.numpad_input_str else "0"
         self.numpad_display_num.configure(text=val)
 
@@ -646,6 +1462,35 @@ class BookshelfApp(ctk.CTk):
             self.numpad_display_meta.configure(text="sivua yhteensä")
 
     def _numpad_append(self, digit):
+        if self._is_duration_input_mode():
+            if self._is_name_entry_focused():
+                self.focus_set()
+            idx = self.active_duration_field
+            if self.duration_field_fresh:
+                self.duration_inputs[idx] = ""
+                self.duration_field_fresh = False
+
+            max_len = 3 if idx == 0 else 2
+            cur_str = self.duration_inputs[idx]
+            if len(cur_str) >= max_len:
+                return
+            if cur_str == "0":
+                cur_str = digit
+            else:
+                cur_str += digit
+
+            # Clamp minutes and seconds to 59
+            if idx in (1, 2):
+                try:
+                    if int(cur_str) > 59:
+                        cur_str = "59"
+                except ValueError:
+                    pass
+
+            self.duration_inputs[idx] = cur_str
+            self._update_numpad_display()
+            return
+
         if self.numpad_fresh:
             self.numpad_input_str = ""
             self.numpad_fresh = False
@@ -667,17 +1512,64 @@ class BookshelfApp(ctk.CTk):
         self._update_numpad_display()
 
     def _numpad_backspace(self):
+        if self._is_duration_input_mode():
+            self.duration_field_fresh = False
+            idx = self.active_duration_field
+            if self.duration_inputs[idx]:
+                self.duration_inputs[idx] = self.duration_inputs[idx][:-1]
+                self._update_numpad_display()
+            return
+
         self.numpad_fresh = False
         if self.numpad_input_str:
             self.numpad_input_str = self.numpad_input_str[:-1]
             self._update_numpad_display()
 
     def _numpad_clear(self):
+        if self._is_duration_input_mode():
+            self.duration_field_fresh = False
+            idx = self.active_duration_field
+            if self.duration_inputs[idx]:
+                self.duration_inputs[idx] = ""
+            else:
+                self.duration_inputs = ["", "", ""]
+            self._update_numpad_display()
+            return
+
         self.numpad_fresh = False
         self.numpad_input_str = ""
         self._update_numpad_display()
 
     def _confirm_numpad(self):
+        if self._is_duration_input_mode():
+            sec = self._get_duration_seconds()
+            if self.numpad_mode == "current_page":
+                total_sec = self.active_book.get("total_seconds", 0)
+                if sec > total_sec:
+                    sec = total_sec
+                self.active_book["current_seconds"] = sec
+                # Updating progress brings the plant to life and raises streak to at least 1
+                self.is_plant_alive = True
+                self.streak_count = max(1, self.streak_count)
+            else:
+                if sec <= 0:
+                    return  # Must have positive duration
+                entered_title = self.new_book_name_entry.get().strip()
+                entered_author = self.new_book_author_entry.get().strip()
+                book_title = entered_title if entered_title else f"E-kirja {len(self.books) + 1}"
+                self.books.append({
+                    "title": book_title,
+                    "author": entered_author,
+                    "type": "ebook",
+                    "current_seconds": 0,
+                    "total_seconds": sec,
+                })
+                self.active_book_index = len(self.books) - 1
+
+            self._show_summary_view()
+            self._refresh_all_views()
+            return
+
         try:
             val = int(self.numpad_input_str) if self.numpad_input_str else 0
         except ValueError:
@@ -687,17 +1579,23 @@ class BookshelfApp(ctk.CTk):
             if val > self.total_pages:
                 val = self.total_pages
             self.current_page = val
-            # Updating page brings the plant to life and raises streak to 1!
+            # Updating page brings the plant to life and raises streak to at least 1
             self.is_plant_alive = True
-            self.streak_count = 1
+            self.streak_count = max(1, self.streak_count)
         else:
             if val <= 0:
                 return  # Must be positive page count
-            self.total_pages = val
-            self.current_page = 0
-            # New book starts fresh with wilted plant & streak at 0
-            self.is_plant_alive = False
-            self.streak_count = 0
+            entered_title = self.new_book_name_entry.get().strip()
+            entered_author = self.new_book_author_entry.get().strip()
+            book_title = entered_title if entered_title else f"Kirja {len(self.books) + 1}"
+            self.books.append({
+                "title": book_title,
+                "author": entered_author,
+                "type": "book",
+                "current_page": 0,
+                "total_pages": val,
+            })
+            self.active_book_index = len(self.books) - 1
 
         self._show_summary_view()
         self._refresh_all_views()
@@ -749,13 +1647,25 @@ class BookshelfApp(ctk.CTk):
         """Activates pitch black standby screen with plant and large progress bar."""
         if not self.is_standby:
             self.is_standby = True
-            pct = (self.current_page / self.total_pages * 100) if self.total_pages > 0 else 0
-            self.standby_stats.configure(text=f"{self.current_page} / {self.total_pages} sivua  •  {pct:.0f}%")
-            self.standby_progress.set(min(1.0, self.current_page / max(1, self.total_pages)))
+            if self.active_book is None:
+                self.standby_stats.configure(text="Ei valittua kirjaa")
+                self.standby_progress.set(0)
+            elif self.is_active_ebook:
+                cur_sec = self.active_book.get("current_seconds", 0)
+                total_sec = self.active_book.get("total_seconds", 0)
+                pct = (cur_sec / total_sec * 100) if total_sec > 0 else 0
+                self.standby_stats.configure(
+                    text=f"{format_duration(cur_sec)} / {format_duration(total_sec)}  •  {pct:.0f}%"
+                )
+                self.standby_progress.set(min(1.0, cur_sec / max(1, total_sec)))
+            else:
+                pct = (self.current_page / self.total_pages * 100) if self.total_pages > 0 else 0
+                self.standby_stats.configure(text=f"{self.current_page} / {self.total_pages} sivua  •  {pct:.0f}%")
+                self.standby_progress.set(min(1.0, self.current_page / max(1, self.total_pages)))
 
             draw_plant_on_canvas(
                 self.standby_plant_canvas,
-                alive=self.is_plant_alive,
+                phase=self.plant_phase,
                 dark_mode=True,
                 w=self.plant_w,
                 h=self.plant_h
@@ -780,6 +1690,15 @@ class BookshelfApp(ctk.CTk):
         self.last_interaction_time = time.time()
         self._schedule_idle_check()
 
+    def _is_name_entry_focused(self):
+        focused = self.focus_get()
+        if focused is None:
+            return False
+        for entry in (self.new_book_name_entry, self.new_book_author_entry):
+            if focused == entry or str(focused).startswith(str(entry)):
+                return True
+        return False
+
     def _on_key_release(self, event=None):
         """Handles physical keyboard presses if used."""
         if self.is_standby:
@@ -788,11 +1707,32 @@ class BookshelfApp(ctk.CTk):
         self.last_interaction_time = time.time()
         self._schedule_idle_check()
 
-        if self.current_view_mode == "numpad" and event is not None:
+        if event is None:
+            return
+
+        if self.current_view_mode == "book_list":
+            if event.keysym == "Escape":
+                if self.pending_delete_index is not None:
+                    self._cancel_delete_book()
+                else:
+                    self._show_summary_view()
+            return
+
+        if self.current_view_mode == "numpad":
+            if event.keysym == "Escape":
+                self._show_summary_view()
+                return
+            if self.numpad_mode == "total_pages" and self._is_name_entry_focused():
+                return
+            if self._is_duration_input_mode():
+                if event.keysym == "Left":
+                    self._select_duration_field((self.active_duration_field - 1) % 3)
+                    return
+                elif event.keysym == "Right":
+                    self._select_duration_field((self.active_duration_field + 1) % 3)
+                    return
             if event.keysym in ("Return", "KP_Enter"):
                 self._confirm_numpad()
-            elif event.keysym == "Escape":
-                self._show_summary_view()
             elif event.keysym == "BackSpace":
                 self._numpad_backspace()
             elif event.char and event.char.isdigit():
@@ -827,32 +1767,110 @@ class BookshelfApp(ctk.CTk):
             self.idle_timer_id = self.after(max(100, remaining_ms), self._check_idle)
 
     def _refresh_all_views(self):
-        cur = self.current_page
-        total = self.total_pages
-        pct = (cur / total * 100) if total > 0 else 0
-        left = max(0, total - cur)
+        if self.active_book is None:
+            self.summary_tag_lbl.configure(text="NYKYINEN KIRJA")
+            self.hero_book_title.configure(text="Ei kirjoja kirjastossa")
+            self.hero_book_author.configure(text="")
+            self.page_caption.configure(text="Nykyinen sivu")
+            self.hero_page_big.configure(text="0", font=ctk.CTkFont(size=38, weight="bold"))
+            self.hero_total_lbl.configure(text="/ 0 sivua")
+            self.hero_pct_big.configure(text="0%")
+            self.hero_rem_lbl.configure(text="Lisää uusi kirja", text_color=TEXT_MUTED)
+            self.add_pages_btn.configure(text="Lisää uusi kirja")
+            self.footer_title_lbl.configure(text="Edistyminen: 0 / 0 sivua")
+            self.footer_pct_lbl.configure(text="0.0%")
+            self.progress_bar.set(0)
+            self.footer_sub_lbl.configure(text="Ei aktiivista kirjaa.", text_color=TEXT_MUTED)
+            draw_plant_on_canvas(self.plant_canvas, phase=self.plant_phase, dark_mode=False, w=self.plant_w, h=self.plant_h)
+            draw_plant_on_canvas(self.standby_plant_canvas, phase=self.plant_phase, dark_mode=True, w=self.plant_w, h=self.plant_h)
+            if self.streak_count == 1:
+                self.streak_text.configure(text="Putki: 1 päivä")
+            else:
+                self.streak_text.configure(text=f"Putki: {self.streak_count} päivää")
+            return
 
-        # Update Reading Summary Card
-        self.hero_page_big.configure(text=str(cur))
-        self.hero_total_lbl.configure(text=f"/ {total} sivua")
-        self.hero_pct_big.configure(text=f"{pct:.0f}%")
+        # Update Reading Summary Card header & title
+        self.hero_book_title.configure(text=self.active_book["title"])
+        author = self.active_book.get("author", "").strip()
+        self.hero_book_author.configure(text=author)
 
-        if cur >= total and total > 0:
-            self.hero_rem_lbl.configure(text="Valmis! Luettu loppuun", text_color="#15803d")
+        if self.is_active_ebook:
+            cur_sec = self.active_book.get("current_seconds", 0)
+            total_sec = self.active_book.get("total_seconds", 0)
+            pct = (cur_sec / total_sec * 100) if total_sec > 0 else 0
+            left_sec = max(0, total_sec - cur_sec)
+
+            self.summary_tag_lbl.configure(text="NYKYINEN E-KIRJA")
+            self.page_caption.configure(text="Kuunneltu")
+            self.hero_page_big.configure(
+                text=format_duration(cur_sec),
+                font=ctk.CTkFont(size=30, weight="bold")
+            )
+            self.hero_total_lbl.configure(text=f"/ {format_duration(total_sec)}")
+            self.hero_pct_big.configure(text=f"{pct:.0f}%")
+            self.add_pages_btn.configure(text="Päivitä kohta, jossa olet")
+
+            if cur_sec >= total_sec and total_sec > 0:
+                self.hero_rem_lbl.configure(text="Valmis! Kuunneltu loppuun", text_color="#15803d")
+            else:
+                self.hero_rem_lbl.configure(text=f"{format_duration(left_sec)} jäljellä", text_color=TEXT_MUTED)
+
+            # Update Bottom Persistent Progress Bar
+            self.footer_title_lbl.configure(
+                text=f"Edistyminen: {format_duration(cur_sec)} / {format_duration(total_sec)}"
+            )
+            self.footer_pct_lbl.configure(text=f"{pct:.1f}%")
+            self.progress_bar.set(min(1.0, cur_sec / max(1, total_sec)))
+
+            if cur_sec >= total_sec and total_sec > 0:
+                self.footer_sub_lbl.configure(text="E-kirja on kuunneltu loppuun!", text_color="#15803d")
+            else:
+                self.footer_sub_lbl.configure(
+                    text=f"{format_duration(left_sec)} jäljellä maaliin.",
+                    text_color=TEXT_MUTED
+                )
         else:
-            self.hero_rem_lbl.configure(text=f"{left} sivua jäljellä", text_color=TEXT_MUTED)
+            cur = self.current_page
+            total = self.total_pages
+            pct = (cur / total * 100) if total > 0 else 0
+            left = max(0, total - cur)
 
-        # Update Center Plant Canvas (wilted vs alive)
+            self.summary_tag_lbl.configure(text="NYKYINEN KIRJA")
+            self.page_caption.configure(text="Nykyinen sivu")
+            self.hero_page_big.configure(
+                text=str(cur),
+                font=ctk.CTkFont(size=38, weight="bold")
+            )
+            self.hero_total_lbl.configure(text=f"/ {total} sivua")
+            self.hero_pct_big.configure(text=f"{pct:.0f}%")
+            self.add_pages_btn.configure(text="Päivitä sivu, jolla olet")
+
+            if cur >= total and total > 0:
+                self.hero_rem_lbl.configure(text="Valmis! Luettu loppuun", text_color="#15803d")
+            else:
+                self.hero_rem_lbl.configure(text=f"{left} sivua jäljellä", text_color=TEXT_MUTED)
+
+            # Update Bottom Persistent Progress Bar
+            self.footer_title_lbl.configure(text=f"Edistyminen: {cur} / {total} sivua")
+            self.footer_pct_lbl.configure(text=f"{pct:.1f}%")
+            self.progress_bar.set(min(1.0, cur / max(1, total)))
+
+            if cur >= total and total > 0:
+                self.footer_sub_lbl.configure(text="Kirja on luettu loppuun!", text_color="#15803d")
+            else:
+                self.footer_sub_lbl.configure(text=f"{left} sivua jäljellä maaliin.", text_color=TEXT_MUTED)
+
+        # Update Center Plant Canvas (5 growth phases driven by streak)
         draw_plant_on_canvas(
             self.plant_canvas,
-            alive=self.is_plant_alive,
+            phase=self.plant_phase,
             dark_mode=False,
             w=self.plant_w,
             h=self.plant_h
         )
         draw_plant_on_canvas(
             self.standby_plant_canvas,
-            alive=self.is_plant_alive,
+            phase=self.plant_phase,
             dark_mode=True,
             w=self.plant_w,
             h=self.plant_h
@@ -863,16 +1881,6 @@ class BookshelfApp(ctk.CTk):
             self.streak_text.configure(text="Putki: 1 päivä")
         else:
             self.streak_text.configure(text=f"Putki: {self.streak_count} päivää")
-
-        # Update Bottom Persistent Progress Bar
-        self.footer_title_lbl.configure(text=f"Edistyminen: {cur} / {total} sivua")
-        self.footer_pct_lbl.configure(text=f"{pct:.1f}%")
-        self.progress_bar.set(min(1.0, cur / max(1, total)))
-
-        if cur >= total and total > 0:
-            self.footer_sub_lbl.configure(text="Kirja on luettu loppuun!", text_color="#15803d")
-        else:
-            self.footer_sub_lbl.configure(text=f"{left} sivua jäljellä maaliin.", text_color=TEXT_MUTED)
 
 
 if __name__ == "__main__":
