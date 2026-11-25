@@ -326,7 +326,7 @@ class BookshelfApp(ctk.CTk):
         self.active_book_index = 0
 
         # Lukuputki alkaa aina nollasta ilman kellointegraatiota
-        self.streak_count = 3
+        self.streak_count = 12
 
         # Kasvin tila: alussa kuihtunut, muuttuu eläväksi kun sivumäärää/kestoa päivitetään
         self.is_plant_alive = False
@@ -339,6 +339,12 @@ class BookshelfApp(ctk.CTk):
         self.creating_ebook = False
         self.numpad_input_str = ""
         self.numpad_fresh = False
+
+        # On-screen QWERTY keyboard state for touchscreen text entry
+        self.active_text_entry = None
+        self.qwerty_visible = False
+        self.kb_shift = True
+        self.kb_mode = "alpha"
 
         # 3-field duration input state: [hours, minutes, seconds]
         self.duration_inputs = ["", "", ""]
@@ -596,26 +602,31 @@ class BookshelfApp(ctk.CTk):
         self.stat_box.pack(fill="both", expand=True, pady=(0, 12))
 
         # Active book title & optional author at the top-left of the gray stat box
+        title_box = ctk.CTkFrame(self.stat_box, fg_color="transparent")
+        title_box.pack(side="top", fill="x", padx=28, pady=(18, 4))
+
         self.hero_book_title = ctk.CTkLabel(
-            self.stat_box,
+            title_box,
             text="",
             font=ctk.CTkFont(size=26, weight="bold"),
             text_color=TEXT_PRIMARY,
-            anchor="w"
+            anchor="w",
+            padx=0
         )
-        self.hero_book_title.pack(side="top", fill="x", padx=32, pady=(20, 0))
+        self.hero_book_title.pack(side="top", anchor="w")
 
         self.hero_book_author = ctk.CTkLabel(
-            self.stat_box,
+            title_box,
             text="",
             font=ctk.CTkFont(size=15),
             text_color=TEXT_SECONDARY,
-            anchor="w"
+            anchor="w",
+            padx=0
         )
-        self.hero_book_author.pack(side="top", fill="x", padx=32, pady=(2, 4))
+        self.hero_book_author.pack(side="top", anchor="w", pady=(2, 0))
 
         stat_inner = ctk.CTkFrame(self.stat_box, fg_color="transparent")
-        stat_inner.pack(fill="both", expand=True, padx=24, pady=(2, 10))
+        stat_inner.pack(fill="both", expand=True, padx=28, pady=(2, 10))
 
         left_stat = ctk.CTkFrame(stat_inner, fg_color="transparent")
         left_stat.pack(side="left")
@@ -769,10 +780,11 @@ class BookshelfApp(ctk.CTk):
         )
         self.new_book_author_entry.grid(row=1, column=1, sticky="ew")
 
-        # Dynamic focus border styling for both text entries
+        # Dynamic focus border styling + touch on-screen QWERTY keyboard trigger
         for entry in (self.new_book_name_entry, self.new_book_author_entry):
-            entry.bind("<FocusIn>", lambda e, ent=entry: ent.configure(border_width=2, border_color=ACCENT_BRASS))
-            entry.bind("<FocusOut>", lambda e, ent=entry: ent.configure(border_width=1, border_color=BORDER_COLOR))
+            entry.bind("<Button-1>", lambda e, ent=entry: self._open_qwerty_for_entry(ent))
+            entry.bind("<FocusIn>", lambda e, ent=entry: self._highlight_text_entry(ent))
+            entry.bind("<FocusOut>", lambda e, ent=entry: self._unhighlight_text_entry(ent))
 
         self.key_container = ctk.CTkFrame(self.numpad_frame, fg_color="transparent")
         self.key_container.pack(fill="both", expand=True)
@@ -983,6 +995,186 @@ class BookshelfApp(ctk.CTk):
                     command=cmd
                 )
                 btn.grid(row=r, column=c, padx=3, pady=3)
+
+        # --- ON-SCREEN TOUCH QWERTY KEYBOARD (shown when tapping title/author fields) ---
+        self.qwerty_frame = ctk.CTkFrame(self.numpad_frame, fg_color="transparent")
+        self._build_qwerty_keyboard()
+
+    def _build_qwerty_keyboard(self):
+        """Builds a compact Finnish/Nordic touchscreen QWERTY keyboard with 123 mode."""
+        for r in range(4):
+            self.qwerty_frame.grid_rowconfigure(r, weight=1, uniform="kb_row")
+        for c in range(11):
+            self.qwerty_frame.grid_columnconfigure(c, weight=1, uniform="kb_col")
+
+        self.kb_alpha_rows = [
+            ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "å"],
+            ["a", "s", "d", "f", "g", "h", "j", "k", "l", "ö", "ä"],
+            ["z", "x", "c", "v", "b", "n", "m"],
+        ]
+        self.kb_num_rows = [
+            ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-"],
+            ["'", ":", ";", ",", ".", "!", "?", "(", ")", "/", "&"],
+            ["+", "=", "*", "#", "%", "@", "\""],
+        ]
+
+        self.kb_char_btns = []
+
+        # Row 0 & Row 1 (11 keys each)
+        for r in (0, 1):
+            row_btns = []
+            for c in range(11):
+                ch = self.kb_alpha_rows[r][c]
+                btn = ctk.CTkButton(
+                    self.qwerty_frame,
+                    text=ch.upper(),
+                    width=28,
+                    height=34,
+                    corner_radius=7,
+                    fg_color=CARD_SURFACE,
+                    hover_color=CARD_HOVER,
+                    text_color=TEXT_PRIMARY,
+                    border_width=1,
+                    border_color=BORDER_COLOR,
+                    font=ctk.CTkFont(size=14, weight="bold"),
+                    command=lambda row_i=r, col_i=c: self._kb_press_grid_char(row_i, col_i)
+                )
+                btn.grid(row=r, column=c, padx=2, pady=2, sticky="nsew")
+                row_btns.append(btn)
+            self.kb_char_btns.append(row_btns)
+
+        # Row 2: Shift (col 0), 7 letters (cols 1..7), apostrophe (col 8), Backspace (cols 9..10)
+        self.kb_shift_btn = ctk.CTkButton(
+            self.qwerty_frame,
+            text="⇧",
+            width=28,
+            height=34,
+            corner_radius=7,
+            fg_color=STREAK_BG,
+            hover_color=CARD_HOVER,
+            text_color=STREAK_TEXT,
+            border_width=1,
+            border_color=ACCENT_BRASS,
+            font=ctk.CTkFont(size=15, weight="bold"),
+            command=self._kb_toggle_shift
+        )
+        self.kb_shift_btn.grid(row=2, column=0, padx=2, pady=2, sticky="nsew")
+
+        row2_btns = []
+        for idx in range(7):
+            ch = self.kb_alpha_rows[2][idx]
+            btn = ctk.CTkButton(
+                self.qwerty_frame,
+                text=ch.upper(),
+                width=28,
+                height=34,
+                corner_radius=7,
+                fg_color=CARD_SURFACE,
+                hover_color=CARD_HOVER,
+                text_color=TEXT_PRIMARY,
+                border_width=1,
+                border_color=BORDER_COLOR,
+                font=ctk.CTkFont(size=14, weight="bold"),
+                command=lambda col_i=idx: self._kb_press_grid_char(2, col_i)
+            )
+            btn.grid(row=2, column=idx + 1, padx=2, pady=2, sticky="nsew")
+            row2_btns.append(btn)
+        self.kb_char_btns.append(row2_btns)
+
+        dash_btn = ctk.CTkButton(
+            self.qwerty_frame,
+            text="-",
+            width=28,
+            height=34,
+            corner_radius=7,
+            fg_color=CARD_SURFACE,
+            hover_color=CARD_HOVER,
+            text_color=TEXT_PRIMARY,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=lambda: self._kb_insert_text("-")
+        )
+        dash_btn.grid(row=2, column=8, padx=2, pady=2, sticky="nsew")
+
+        kb_bksp_btn = ctk.CTkButton(
+            self.qwerty_frame,
+            text="⌫",
+            width=28,
+            height=34,
+            corner_radius=7,
+            fg_color="#fdf2f2",
+            hover_color="#fee2e2",
+            text_color="#dc2626",
+            border_width=1,
+            border_color="#fecaca",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            command=self._kb_backspace
+        )
+        kb_bksp_btn.grid(row=2, column=9, columnspan=2, padx=2, pady=2, sticky="nsew")
+
+        # Row 3: 123/ABC toggle (cols 0..1), Space (cols 2..7), Period (col 8), Done (cols 9..10)
+        self.kb_mode_btn = ctk.CTkButton(
+            self.qwerty_frame,
+            text="123",
+            width=28,
+            height=34,
+            corner_radius=7,
+            fg_color=CARD_SURFACE,
+            hover_color=CARD_HOVER,
+            text_color=TEXT_PRIMARY,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=self._kb_toggle_mode
+        )
+        self.kb_mode_btn.grid(row=3, column=0, columnspan=2, padx=2, pady=2, sticky="nsew")
+
+        space_btn = ctk.CTkButton(
+            self.qwerty_frame,
+            text="Välilyönti",
+            width=28,
+            height=34,
+            corner_radius=7,
+            fg_color=CARD_SURFACE,
+            hover_color=CARD_HOVER,
+            text_color=TEXT_SECONDARY,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=lambda: self._kb_insert_text(" ")
+        )
+        space_btn.grid(row=3, column=2, columnspan=6, padx=2, pady=2, sticky="nsew")
+
+        dot_btn = ctk.CTkButton(
+            self.qwerty_frame,
+            text=".",
+            width=28,
+            height=34,
+            corner_radius=7,
+            fg_color=CARD_SURFACE,
+            hover_color=CARD_HOVER,
+            text_color=TEXT_PRIMARY,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=lambda: self._kb_insert_text(".")
+        )
+        dot_btn.grid(row=3, column=8, padx=2, pady=2, sticky="nsew")
+
+        kb_done_btn = ctk.CTkButton(
+            self.qwerty_frame,
+            text="Valmis ✓",
+            width=28,
+            height=34,
+            corner_radius=7,
+            fg_color=ACCENT_DARK,
+            hover_color=ACCENT_DARK_HOVER,
+            text_color="#ffffff",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=self._close_qwerty
+        )
+        kb_done_btn.grid(row=3, column=9, columnspan=2, padx=2, pady=2, sticky="nsew")
 
     def _build_book_list_view(self):
         """Simple in-window book switcher listing each book's name, progress, and 'Valitse kirja' button."""
@@ -1213,9 +1405,115 @@ class BookshelfApp(ctk.CTk):
     def _hide_all_views(self):
         """Hides all main card sub-views before switching to another."""
         self._cancel_delete_book()
+        self._close_qwerty()
         self.summary_frame.pack_forget()
         self.numpad_frame.pack_forget()
         self.book_list_frame.pack_forget()
+
+    def _highlight_text_entry(self, entry):
+        """Highlights the focused text entry."""
+        for ent in (self.new_book_name_entry, self.new_book_author_entry):
+            if ent == entry:
+                ent.configure(border_width=2, border_color=ACCENT_BRASS)
+            else:
+                ent.configure(border_width=1, border_color=BORDER_COLOR)
+
+    def _unhighlight_text_entry(self, entry):
+        """Removes highlight when focus leaves an entry unless QWERTY is still targeting it."""
+        if self.qwerty_visible and self.active_text_entry == entry:
+            return
+        entry.configure(border_width=1, border_color=BORDER_COLOR)
+
+    def _open_qwerty_for_entry(self, entry):
+        """Shows the in-window touch QWERTY keyboard for typing into the tapped entry."""
+        if self.numpad_mode != "total_pages":
+            return
+        self.active_text_entry = entry
+        self._highlight_text_entry(entry)
+        self.kb_mode = "alpha"
+        self.kb_shift = (len(entry.get()) == 0)
+        self._refresh_qwerty_keys()
+        if not self.qwerty_visible:
+            self.key_container.pack_forget()
+            self.qwerty_frame.pack(fill="both", expand=True)
+            self.qwerty_visible = True
+
+    def _close_qwerty(self):
+        """Hides the touch QWERTY keyboard and restores the numpad/duration view."""
+        if self.qwerty_visible:
+            self.qwerty_frame.pack_forget()
+            self.key_container.pack(fill="both", expand=True)
+            self.qwerty_visible = False
+        self.active_text_entry = None
+        for ent in (self.new_book_name_entry, self.new_book_author_entry):
+            ent.configure(border_width=1, border_color=BORDER_COLOR)
+        if self.current_view_mode == "numpad":
+            self.focus_set()
+
+    def _refresh_qwerty_keys(self):
+        """Updates QWERTY key labels for alpha/num and shift state."""
+        if self.kb_mode == "alpha":
+            rows = self.kb_alpha_rows
+            self.kb_mode_btn.configure(text="123")
+            self.kb_shift_btn.configure(
+                text="⇧",
+                state="normal",
+                fg_color=STREAK_BG if self.kb_shift else CARD_SURFACE,
+                border_color=ACCENT_BRASS if self.kb_shift else BORDER_COLOR,
+                text_color=STREAK_TEXT if self.kb_shift else TEXT_PRIMARY
+            )
+            for r, row_btns in enumerate(self.kb_char_btns):
+                for c, btn in enumerate(row_btns):
+                    ch = rows[r][c]
+                    btn.configure(text=ch.upper() if self.kb_shift else ch.lower())
+        else:
+            rows = self.kb_num_rows
+            self.kb_mode_btn.configure(text="ABC")
+            self.kb_shift_btn.configure(
+                text="⇧",
+                state="disabled",
+                fg_color=CARD_SURFACE,
+                border_color=BORDER_COLOR,
+                text_color=TEXT_MUTED
+            )
+            for r, row_btns in enumerate(self.kb_char_btns):
+                for c, btn in enumerate(row_btns):
+                    btn.configure(text=rows[r][c])
+
+    def _kb_toggle_shift(self):
+        if self.kb_mode == "alpha":
+            self.kb_shift = not self.kb_shift
+            self._refresh_qwerty_keys()
+
+    def _kb_toggle_mode(self):
+        self.kb_mode = "num" if self.kb_mode == "alpha" else "alpha"
+        self._refresh_qwerty_keys()
+
+    def _kb_press_grid_char(self, row_i, col_i):
+        if self.kb_mode == "alpha":
+            ch = self.kb_alpha_rows[row_i][col_i]
+            ch = ch.upper() if self.kb_shift else ch.lower()
+            self._kb_insert_text(ch)
+            if self.kb_shift:
+                self.kb_shift = False
+                self._refresh_qwerty_keys()
+        else:
+            ch = self.kb_num_rows[row_i][col_i]
+            self._kb_insert_text(ch)
+
+    def _kb_insert_text(self, text):
+        entry = self.active_text_entry
+        if entry is None:
+            return
+        entry.insert("insert", text)
+
+    def _kb_backspace(self):
+        entry = self.active_text_entry
+        if entry is None:
+            return
+        pos = entry.index("insert")
+        if pos > 0:
+            entry.delete(pos - 1, pos)
 
     def _show_book_list_view(self):
         """Opens the simple book selection menu inside the same window."""
@@ -1416,7 +1714,6 @@ class BookshelfApp(ctk.CTk):
         self._hide_all_views()
         self.numpad_frame.pack(fill="both", expand=True, padx=26, pady=16)
         self.current_view_mode = "numpad"
-        self.new_book_name_entry.focus_set()
 
     def _show_summary_view(self):
         """Transitions back to the reading summary card."""
@@ -1720,7 +2017,10 @@ class BookshelfApp(ctk.CTk):
 
         if self.current_view_mode == "numpad":
             if event.keysym == "Escape":
-                self._show_summary_view()
+                if self.qwerty_visible:
+                    self._close_qwerty()
+                else:
+                    self._show_summary_view()
                 return
             if self.numpad_mode == "total_pages" and self._is_name_entry_focused():
                 return

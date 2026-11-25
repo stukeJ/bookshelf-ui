@@ -1,3 +1,5 @@
+This project was almost entirely vibe-coded, so don't expect the code to be pretty.
+
 Display for a bookshelf screen that shows your current progress for the book
 
 Works on pc and touchscreen raspberry pi display
